@@ -1,0 +1,43 @@
+name: Acordar o Cursor
+
+# Dispara a automação do Cursor quando o orquestrador libera uma task
+# (issue com `pronta-cursor`) ou pede correção (PR com `correcao`).
+on:
+  issues:
+    types: [labeled]
+  pull_request:
+    types: [labeled]
+
+# Um disparo por vez: evita acordar o Cursor duas vezes para o mesmo item.
+concurrency:
+  group: cursor-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  disparar:
+    if: >-
+      (github.event_name == 'issues' && github.event.label.name == 'pronta-cursor' && github.event.issue.pull_request == null)
+      || (github.event_name == 'pull_request' && github.event.label.name == 'correcao'
+          && github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Chamar o webhook da automação do Cursor
+        env:
+          CURSOR_WEBHOOK_URL: ${{ secrets.CURSOR_WEBHOOK_URL }}
+          CURSOR_WEBHOOK_API_KEY: ${{ secrets.CURSOR_WEBHOOK_API_KEY }}
+          NUMERO: ${{ github.event.issue.number || github.event.pull_request.number }}
+          TITULO: ${{ github.event.issue.title || github.event.pull_request.title }}
+          URL: ${{ github.event.issue.html_url || github.event.pull_request.html_url }}
+          ETIQUETA: ${{ github.event.label.name }}
+        run: |
+          jq -n \
+            --argjson numero "$NUMERO" --arg titulo "$TITULO" \
+            --arg url "$URL" --arg etiqueta "$ETIQUETA" \
+            '{numero:$numero, titulo:$titulo, url:$url, etiqueta:$etiqueta}' \
+          | curl --fail-with-body -sS -X POST "$CURSOR_WEBHOOK_URL" \
+              -H "Authorization: Bearer $CURSOR_WEBHOOK_API_KEY" \
+              -H "Content-Type: application/json" \
+              --data-binary @-

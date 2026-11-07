@@ -1,0 +1,10 @@
+{
+  "name": "fabrica-de-software",
+  "user": "ubuntu",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "install": "bash automacao/cursor/instalar.sh",
+  "start": "sudo service docker start"
+}
