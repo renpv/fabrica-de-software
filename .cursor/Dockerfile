@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o /etc/apt/keyrings/githubcli.gpg \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli.gpg] https://cli.github.com/packages stable main" \
        > /etc/apt/sources.list.d/github-cli.list \
-    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && curl -fsSL https://deb.nodesource.com/setup_26.x | bash - \
     && apt-get install -y --no-install-recommends \
       docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin \
       gh nodejs \
@@ -36,6 +36,6 @@ RUN usermod -aG docker,sudo ubuntu \
 
 USER ubuntu
 ENV PATH="/home/ubuntu/.local/bin:${PATH}"
-# uv e Python 3.13 (versão fixada em backend/.python-version).
+# uv e Python 3.14 (versão fixada em backend/.python-version).
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
-    && /home/ubuntu/.local/bin/uv python install 3.13
+    && /home/ubuntu/.local/bin/uv python install 3.14

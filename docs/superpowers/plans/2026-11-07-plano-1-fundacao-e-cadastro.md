@@ -6,7 +6,7 @@
 
 **Architecture:** Monólito modular em Django 5.2 + DRF (`backend/apps/<módulo>`), com uma camada de serviços por módulo e adaptadores (padrão Strategy + Adapter) para cada agente e cada plataforma, registrados por tipo. Front-end React + TypeScript + Mantine (`frontend/`) que consome a API tipada pelo OpenAPI. Toda entidade pertence a um `Dono`, e o isolamento é garantido por um mixin de queryset e por testes.
 
-**Tech Stack:** Python 3.13, uv, Django >=5.2,<5.3, DRF, drf-spectacular, django-environ, cryptography (Fernet), httpx + respx, PyJWT[crypto], pytest-django, import-linter, PostgreSQL 17 · Node 22, React 19, Vite, TypeScript, Mantine 9, TanStack Query 5, openapi-fetch, openapi-typescript, Vitest, Testing Library, MSW, oxlint (as mesmas do top-tenis, `~/dev/top-tenis/backend/pyproject.toml` e `frontend/package.json`).
+**Tech Stack:** Python 3.14, uv, Django >=5.2.19,<5.3 (LTS), DRF, drf-spectacular, django-environ, cryptography (Fernet), httpx + respx, PyJWT[crypto], pytest-django, import-linter, PostgreSQL 18 · Node 26 (LTS), React 19, Vite, TypeScript, Mantine 9, TanStack Query 5, openapi-fetch, openapi-typescript, Vitest, Testing Library, MSW, oxlint (as do top-tenis, com Python, Node e PostgreSQL atualizados conforme `docs/pesquisa/2026-11-07-versoes-da-stack.md`).
 
 **Spec:** `docs/superpowers/specs/2026-11-07-fabrica-de-software-design.md`
 
@@ -22,7 +22,8 @@ A spec foi dividida em planos que entregam software funcionando cada um (escolha
 
 ## Global Constraints
 
-- Python 3.13 fixado em `backend/.python-version`; Node 22 em `frontend/.nvmrc`; Django `>=5.2,<5.3`; PostgreSQL 17.
+- Python 3.14 fixado em `backend/.python-version` e `requires-python = ">=3.14,<3.15"` (o Django 5.2 não suporta 3.15); Node 26 em `frontend/.nvmrc` e `engines.node = ">=26"`; Django `>=5.2.19,<5.3` (piso com as correções de segurança de 03/11/2026); PostgreSQL 18 (`postgres:18`, volume montado em `/var/lib/postgresql`, e não em `/var/lib/postgresql/data`). Fonte: `docs/pesquisa/2026-11-07-versoes-da-stack.md`.
+- `uv`: `[tool.uv] required-version = ">=0.13.4"` no `pyproject.toml` (aviso de segurança corrigido na 0.13.4).
 - Banco de desenvolvimento e testes na porta **5434** (o top-tenis usa a 5433).
 - Configuração só por variável de ambiente (12-factor): `DATABASE_URL`, `DJANGO_SECRET_KEY`, `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS`, `FABRICA_URL_PUBLICA`, `FABRICA_CHAVES_COFRE` (lista separada por vírgula; a primeira cifra, todas decifram). `.env.example` sem valores reais.
 - Segredos nunca aparecem em resposta da API, log, `repr`, mensagem de erro nem fixture. Na API são só de escrita; a leitura devolve `tem_credenciais: bool`.
@@ -49,7 +50,7 @@ Cobre o checklist de projeto novo (`~/.claude/revisao/projeto-novo.md`) no que c
 
 **Files:**
 - Create: `backend/pyproject.toml`, `backend/.python-version`, `backend/manage.py`, `backend/config/{__init__,settings,urls,wsgi}.py`, `backend/apps/__init__.py`, `backend/apps/saude/{__init__,apps,views}.py`, `backend/pytest.ini`, `backend/conftest.py`, `backend/.importlinter`
-- Create: `docker-compose.dev.yml` (serviço `db`, `postgres:17`, porta `5434:5432`)
+- Create: `docker-compose.dev.yml` (serviço `db`, `postgres:18`, porta `5434:5432`, volume em `/var/lib/postgresql`)
 - Create: `automacao/verificar.sh` (lint, contratos de importação, `makemigrations --check`, pytest e, a partir da Task 11, lint, tipos e testes do front-end), `.github/workflows/ci.yml` (roda `automacao/verificar.sh` com um serviço Postgres 17)
 - Create: `.gitignore`, `.env.example`, `README.md` (como rodar, testar e o fluxo `main` → homologação → produção com *upstream first*), `CLAUDE.md` (propósito, comandos, onde cada versão é fixada, módulos e contratos)
 - Run: `~/.claude/revisao/git-hooks/instalar.sh .` (gera o `.pre-commit-config.yaml`); no pre-push, troque o `echo` da base por `automacao/verificar.sh`
@@ -388,7 +389,7 @@ Só recebe, verifica e guarda. Quem processa é o Plano 3.
 ### Task 11: Base do front-end e login
 
 **Files:**
-- Create: `frontend/` com Vite (React + TS), Mantine 9, TanStack Query 5, react-router 7, openapi-fetch, openapi-typescript (script `gerar-api` igual ao do top-tenis), Vitest + Testing Library + MSW, oxlint; `frontend/.nvmrc` (`22`); `frontend/src/api/cliente.ts` (openapi-fetch com `credentials: "include"` e o cabeçalho `X-CSRFToken` lido do cookie); `frontend/src/tema/{tokens.ts,tema.ts}`; `frontend/src/app/{App.tsx,rotas.tsx,Layout.tsx}`; `frontend/src/sessao/{TelaLogin.tsx,useSessao.ts,RotaProtegida.tsx}`; proxy do Vite `/api` → `http://localhost:8000`
+- Create: `frontend/` com Vite (React + TS), Mantine 9, TanStack Query 5, react-router 7, openapi-fetch, openapi-typescript (script `gerar-api` igual ao do top-tenis), Vitest + Testing Library + MSW, oxlint; `frontend/.nvmrc` (`26`); `frontend/src/api/cliente.ts` (openapi-fetch com `credentials: "include"` e o cabeçalho `X-CSRFToken` lido do cookie); `frontend/src/tema/{tokens.ts,tema.ts}`; `frontend/src/app/{App.tsx,rotas.tsx,Layout.tsx}`; `frontend/src/sessao/{TelaLogin.tsx,useSessao.ts,RotaProtegida.tsx}`; proxy do Vite `/api` → `http://localhost:8000`
 - Modify: `automacao/verificar.sh` (`npm run lint`, `npx tsc -b`, `npx vitest run`)
 - Test: `frontend/src/sessao/TelaLogin.test.tsx`, `frontend/src/sessao/RotaProtegida.test.tsx`
 

@@ -17,7 +17,7 @@ Você é o programador do repositório `renpv/fabrica-de-software`: Django 5.2 +
 3. **Branch:** comece com `git fetch origin` e crie `tarefa-<número da issue>` a partir de `origin/main` **atual**. Antes de abrir o PR, faça de novo `git fetch origin && git rebase origin/main`.
 4. **Implemente somente a task da issue**, nesta ordem: escreva os testes, rode e veja falhar, implemente, rode e veja passar. Use exatamente os nomes de arquivos, funções, campos, rotas e mensagens do plano.
 5. **Verifique tudo antes do PR:**
-   - suba o banco: `docker compose -f docker-compose.dev.yml up -d db` (PostgreSQL 17 na porta 5434) e crie o `.env` a partir do `.env.example`;
+   - suba o banco: `docker compose -f docker-compose.dev.yml up -d db` (PostgreSQL 18 na porta 5434) e crie o `.env` a partir do `.env.example`;
    - rode `automacao/verificar.sh` (se ainda não existir, porque é a Task 1, rode os comandos de verificação da própria task). Ele precisa terminar com código 0. Um relato que diz "passou" sem ter rodado é falha grave;
    - se a API mudou: `cd backend && uv run python manage.py spectacular --file ../frontend/openapi.yaml` e, se o front existir, `cd frontend && npm run gerar-api`.
 6. **PR:**
