@@ -155,6 +155,225 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/conexoes-plataforma/:
+    get:
+      operationId: conexoes_plataforma_list
+      description: Conexões do dono logado. Criam-se pelo fluxo de cada plataforma,
+        não por POST aqui.
+      tags:
+      - conexoes-plataforma
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ConexaoPlataforma'
+          description: ''
+  /api/conexoes-plataforma/{id}/:
+    get:
+      operationId: conexoes_plataforma_retrieve
+      description: Conexões do dono logado. Criam-se pelo fluxo de cada plataforma,
+        não por POST aqui.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Um string UUID que identifica este conexao plataforma.
+        required: true
+      tags:
+      - conexoes-plataforma
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConexaoPlataforma'
+          description: ''
+    delete:
+      operationId: conexoes_plataforma_destroy
+      description: Conexões do dono logado. Criam-se pelo fluxo de cada plataforma,
+        não por POST aqui.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Um string UUID que identifica este conexao plataforma.
+        required: true
+      tags:
+      - conexoes-plataforma
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/conexoes-plataforma/{id}/repositorios/:
+    get:
+      operationId: conexoes_plataforma_repositorios_list
+      description: Todos os repositórios que a conexão enxerga.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Um string UUID que identifica este conexao plataforma.
+        required: true
+      tags:
+      - conexoes-plataforma
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Repositorio'
+          description: ''
+        '502':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+          description: ''
+  /api/conexoes-plataforma/{id}/testar/:
+    post:
+      operationId: conexoes_plataforma_testar_create
+      description: Testa a conexão salva e grava o resultado nela.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Um string UUID que identifica este conexao plataforma.
+        required: true
+      tags:
+      - conexoes-plataforma
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TesteDaConexao'
+          description: ''
+  /api/conexoes-plataforma/github/instalado/:
+    get:
+      operationId: conexoes_plataforma_github_instalado
+      description: 'Volta do GitHub depois de instalar o App: grava a instalação e
+        abre a tela no front.'
+      parameters:
+      - in: query
+        name: installation_id
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: state
+        schema:
+          type: string
+        required: true
+      tags:
+      - conexoes-plataforma
+      security:
+      - cookieAuth: []
+      responses:
+        '302':
+          description: No response body
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+          description: ''
+        '502':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+          description: ''
+  /api/conexoes-plataforma/github/manifesto/:
+    post:
+      operationId: conexoes_plataforma_github_manifesto
+      description: Gera o manifesto do GitHub App e a URL de criação (o front envia
+        por formulário).
+      tags:
+      - conexoes-plataforma
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManifestoPedido'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ManifestoPedido'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ManifestoPedido'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManifestoResposta'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+          description: ''
+  /api/conexoes-plataforma/github/retorno/:
+    get:
+      operationId: conexoes_plataforma_github_retorno
+      description: 'Volta do GitHub depois de criar o App: converte o código e leva
+        para instalar.'
+      parameters:
+      - in: query
+        name: code
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: state
+        schema:
+          type: string
+        required: true
+      tags:
+      - conexoes-plataforma
+      security:
+      - cookieAuth: []
+      responses:
+        '302':
+          description: No response body
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+          description: ''
+        '502':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+          description: ''
   /api/contas-agente/:
     get:
       operationId: contas_agente_list
@@ -473,6 +692,55 @@ components:
       required:
       - id
       - nome
+    ConexaoPlataforma:
+      type: object
+      description: 'Leitura da conexão. As credenciais nunca saem: só `tem_credenciais`.'
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        nome:
+          type: string
+          readOnly: true
+        tipo:
+          allOf:
+          - $ref: '#/components/schemas/TipoEnum'
+          readOnly: true
+        url_base:
+          type: string
+          readOnly: true
+        config:
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ConexaoPlataformaStatusEnum'
+          readOnly: true
+        ultimo_teste_mensagem:
+          type: string
+          readOnly: true
+        tem_credenciais:
+          type: boolean
+          readOnly: true
+      required:
+      - config
+      - id
+      - nome
+      - status
+      - tem_credenciais
+      - tipo
+      - ultimo_teste_mensagem
+      - url_base
+    ConexaoPlataformaStatusEnum:
+      enum:
+      - nao_testada
+      - ok
+      - falha
+      type: string
+      description: |-
+        * `nao_testada` - Não testada
+        * `ok` - Funcionando
+        * `falha` - Com falha
     ContaAgente:
       type: object
       description: Conta de agente. `credenciais` só entra; a leitura devolve `tem_credenciais`.
@@ -497,7 +765,7 @@ components:
           minimum: 0
         status:
           allOf:
-          - $ref: '#/components/schemas/StatusEnum'
+          - $ref: '#/components/schemas/ContaAgenteStatusEnum'
           readOnly: true
         ultimo_teste_em:
           type: string
@@ -520,6 +788,25 @@ components:
       - tipo
       - ultimo_teste_em
       - ultimo_teste_mensagem
+    ContaAgenteStatusEnum:
+      enum:
+      - nao_testada
+      - ok
+      - falha
+      - aguardando_runner
+      type: string
+      description: |-
+        * `nao_testada` - Não testada
+        * `ok` - Funcionando
+        * `falha` - Com falha
+        * `aguardando_runner` - Aguardando o runner
+    Erro:
+      type: object
+      properties:
+        detail:
+          type: string
+      required:
+      - detail
     Login:
       type: object
       properties:
@@ -531,6 +818,26 @@ components:
       required:
       - senha
       - usuario
+    ManifestoPedido:
+      type: object
+      properties:
+        nome:
+          type: string
+          maxLength: 100
+      required:
+      - nome
+    ManifestoResposta:
+      type: object
+      properties:
+        acao:
+          type: string
+          format: uri
+        manifesto:
+          type: object
+          additionalProperties: {}
+      required:
+      - acao
+      - manifesto
     PassoGuia:
       type: object
       properties:
@@ -576,7 +883,7 @@ components:
           minimum: 0
         status:
           allOf:
-          - $ref: '#/components/schemas/StatusEnum'
+          - $ref: '#/components/schemas/ContaAgenteStatusEnum'
           readOnly: true
         ultimo_teste_em:
           type: string
@@ -591,6 +898,19 @@ components:
           readOnly: true
         credenciais:
           writeOnly: true
+    Repositorio:
+      type: object
+      properties:
+        id_externo:
+          type: string
+        caminho:
+          type: string
+        url_web:
+          type: string
+      required:
+      - caminho
+      - id_externo
+      - url_web
     ResultadoTeste:
       type: object
       properties:
@@ -604,18 +924,19 @@ components:
       - mensagem
       - ok
       - status
-    StatusEnum:
-      enum:
-      - nao_testada
+    TesteDaConexao:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        status:
+          type: string
+        mensagem:
+          type: string
+      required:
+      - mensagem
       - ok
-      - falha
-      - aguardando_runner
-      type: string
-      description: |-
-        * `nao_testada` - Não testada
-        * `ok` - Funcionando
-        * `falha` - Com falha
-        * `aguardando_runner` - Aguardando o runner
+      - status
     TesteDeDados:
       type: object
       description: Dados de uma conta ainda não salva, para testar a conexão.
@@ -655,6 +976,14 @@ components:
       - modelos_sugeridos
       - nome
       - tipo
+    TipoEnum:
+      enum:
+      - github
+      - gitlab
+      type: string
+      description: |-
+        * `github` - GitHub
+        * `gitlab` - GitLab
   securitySchemes:
     cookieAuth:
       type: apiKey
