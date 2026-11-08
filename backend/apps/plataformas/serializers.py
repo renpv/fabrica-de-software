@@ -36,6 +36,12 @@ class ManifestoRespostaSerializer(serializers.Serializer):
     manifesto = serializers.DictField()
 
 
+class CriarGitLabSerializer(serializers.Serializer):
+    nome = serializers.CharField(max_length=120)
+    url_base = serializers.CharField(max_length=200)
+    token = serializers.CharField(max_length=500, write_only=True, trim_whitespace=False)
+
+
 class RetornoGitHubSerializer(serializers.Serializer):
     code = serializers.CharField(max_length=200)
     state = serializers.CharField(max_length=2000)

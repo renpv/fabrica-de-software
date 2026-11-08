@@ -9,7 +9,7 @@ passo no outro.
 import re
 import secrets
 import uuid
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 from django.conf import settings
 from django.core import signing
@@ -17,6 +17,7 @@ from django.core.cache import cache
 
 from .adaptadores import github, obter_adaptador
 from .adaptadores.base import ErroDePlataforma, Repositorio, ResultadoTeste
+from .adaptadores.gitlab import MSG_TOKEN_INVALIDO, token_valido
 from .erros import MENSAGENS_DE_ERRO
 from .models import ConexaoPlataforma
 
@@ -33,6 +34,76 @@ class ErroDeFluxo(Exception):
     def __init__(self, codigo: str):
         super().__init__(MENSAGENS_DE_ERRO[codigo])
         self.codigo = codigo
+
+
+class ConexaoRecusada(Exception):
+    """Dados de conexão recusados (formato ou teste). A mensagem é pt-BR, sem segredo."""
+
+
+MSG_URL_INVALIDA = (
+    "O endereço do GitLab é inválido. Use algo como https://gitlab.suaempresa.com.br, "
+    "sem usuário, senha nem parâmetros."
+)
+
+
+def normalizar_url_gitlab(texto: str) -> str:
+    """Devolve `https://host[/caminho]` sem barra no fim e sem `/api/v4`.
+
+    Sem esquema, assume `https://`. Levanta ValueError (pt-BR) se o endereço não serve.
+    """
+    texto = (texto or "").strip()
+    if not texto:
+        raise ValueError(MSG_URL_INVALIDA)
+    if "://" not in texto:
+        texto = f"https://{texto}"
+    try:
+        partes = urlsplit(texto)
+        host, _ = partes.hostname, partes.port
+    except ValueError:
+        raise ValueError(MSG_URL_INVALIDA) from None
+    if (
+        partes.scheme not in ("http", "https")
+        or not host
+        or partes.username is not None
+        or partes.password is not None
+        or partes.query
+        or partes.fragment
+    ):
+        raise ValueError(MSG_URL_INVALIDA)
+    caminho = partes.path.rstrip("/").removesuffix("/api/v4").rstrip("/")
+    return f"{partes.scheme}://{partes.netloc}{caminho}"
+
+
+def url_webhook_gitlab(conexao: ConexaoPlataforma) -> str:
+    base = settings.FABRICA_URL_PUBLICA.rstrip("/")
+    return f"{base}/api/webhooks/gitlab/{conexao.id}/"
+
+
+def criar_conexao_gitlab(dono, nome: str, url_base: str, token: str) -> ConexaoPlataforma:
+    """Valida, testa e só então grava a conexão. Levanta ConexaoRecusada (pt-BR)."""
+    try:
+        url = normalizar_url_gitlab(url_base)
+    except ValueError as erro:
+        raise ConexaoRecusada(str(erro)) from None
+    token = (token or "").strip()
+    if not token_valido(token):
+        raise ConexaoRecusada(MSG_TOKEN_INVALIDO)
+    conexao = ConexaoPlataforma(
+        dono=dono,
+        nome=nome,
+        tipo="gitlab",
+        url_base=url,
+        credenciais={"token": token, "webhook_secret": secrets.token_urlsafe(32)},
+    )
+    resultado = obter_adaptador(conexao).testar()
+    if not resultado.ok:
+        raise ConexaoRecusada(resultado.mensagem)
+    conexao.status = resultado.status
+    conexao.ultimo_teste_mensagem = resultado.mensagem[
+        : conexao._meta.get_field("ultimo_teste_mensagem").max_length
+    ]
+    conexao.save()
+    return conexao
 
 
 def url_front() -> str:
@@ -156,14 +227,18 @@ def excluir_conexao(conexao: ConexaoPlataforma) -> None:
 
 
 __all__ = [
+    "ConexaoRecusada",
     "ErroDeFluxo",
     "ErroDePlataforma",
     "MENSAGENS_DE_ERRO",
     "concluir_instalacao",
     "concluir_manifesto",
+    "criar_conexao_gitlab",
     "excluir_conexao",
     "gerar_manifesto",
     "listar_repositorios",
+    "normalizar_url_gitlab",
     "testar_conexao",
     "url_de_erro",
+    "url_webhook_gitlab",
 ]

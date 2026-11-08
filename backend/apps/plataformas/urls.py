@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     ConexaoPlataformaViewSet,
+    CriarGitLabView,
     InstaladoGitHubView,
     ManifestoGitHubView,
     RetornoGitHubView,
@@ -13,6 +14,7 @@ router.include_root_view = False
 router.register("conexoes-plataforma", ConexaoPlataformaViewSet, basename="conexao-plataforma")
 
 urlpatterns = [
+    path("conexoes-plataforma/gitlab/", CriarGitLabView.as_view()),
     path("conexoes-plataforma/github/manifesto/", ManifestoGitHubView.as_view()),
     path("conexoes-plataforma/github/retorno/", RetornoGitHubView.as_view()),
     path("conexoes-plataforma/github/instalado/", InstaladoGitHubView.as_view()),
