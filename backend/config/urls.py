@@ -5,5 +5,6 @@ from drf_spectacular.views import SpectacularAPIView
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+    path("api/sessao/", include("apps.donos.urls")),
     path("api/saude/", include("apps.saude.urls")),
 ]

@@ -8,11 +8,20 @@
 [importlinter]
 root_package = apps
 
+[importlinter:contract:donos-isolado]
+name = O módulo donos não importa nenhum outro módulo de apps
+type = forbidden
+source_modules =
+    apps.donos
+forbidden_modules =
+    apps.saude
+allow_indirect_imports = True
+
 [importlinter:contract:saude-isolado]
 name = O módulo saude não importa nenhum outro módulo de apps
 type = forbidden
 source_modules =
     apps.saude
 forbidden_modules =
-    apps.*
+    apps.donos
 allow_indirect_imports = True
