@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# Publica a Task N de um plano como issue para o executor.
-# Uso: automacao/publicar-tarefa.sh docs/superpowers/plans/<plano>.md <N> [etiqueta]
-#   etiqueta: "pronta-cursor" (padrão). A etiqueta vai por último, porque é o gatilho.
+# Publica a Task N de um plano como issue.
+# Uso: automacao/publicar-tarefa.sh docs/superpowers/plans/<plano>.md <N> [agente]
+#   Põe `tarefa` e `acao:implementar`. Com [agente] (ex.: cursor), põe `agente:<agente>`
+#   por último, porque é a etiqueta do agente que o acorda. Sem ele, ninguém é acordado.
 # Idempotente: se já existe issue aberta com o mesmo título, não cria outra.
 set -euo pipefail
 
 REPO="renpv/fabrica-de-software"
 PLANO="$1"
 N="$2"
-ETIQUETA="${3:-pronta-cursor}"
+AGENTE="${3:-}"
 
 SPEC="$(grep -m1 -oE '^\*\*Spec:\*\* `[^`]+`' "$PLANO" | grep -oE '`[^`]+`' | tr -d '`')"
 [ -n "$SPEC" ] || { echo "Plano sem linha **Spec:**" >&2; exit 1; }
@@ -23,7 +24,7 @@ if not m:
     sys.exit(f"Task {n} não encontrada em {plano}")
 print(f"**Plano:** `{plano}` (Task {n} de {total})\n**Spec:** `{spec}`\n\n"
       "Leia o plano inteiro, em especial *Global Constraints* e *Review Focus*, "
-      "e o contrato em `automacao/cursor/PROMPT.md`.\n")
+      "e o contrato do executor (para o Cursor, `automacao/cursor/PROMPT.md`).\n")
 print(m.group(0).strip())
 EOF
 )"
@@ -38,6 +39,8 @@ if [ -n "$existente" ]; then
   exit 0
 fi
 
-url="$(gh issue create -R "$REPO" --title "$titulo" --label tarefa --body "$corpo")"
-gh issue edit "$url" --add-label "$ETIQUETA" >/dev/null
+url="$(gh issue create -R "$REPO" --title "$titulo" --label tarefa --label acao:implementar --body "$corpo")"
+if [ -n "$AGENTE" ]; then
+  gh issue edit "$url" --add-label "agente:$AGENTE" >/dev/null
+fi
 echo "$url"

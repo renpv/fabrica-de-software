@@ -32,7 +32,8 @@ A spec foi dividida em planos que entregam software funcionando cada um (escolha
 - Textos de interface e mensagens de erro em português do Brasil, dizendo o que fazer ("A chave foi recusada pelo Cursor. Gere uma nova e cole aqui.").
 - Contratos de importação (`backend/.importlinter`): `cofre` e `donos` não importam ninguém; `agentes` e `plataformas` só importam `cofre` e `donos`; `fluxos` importa `agentes`; `projetos` importa `plataformas`, `fluxos`, `agentes`. Views e API só chamam `servicos.py`.
 - Commits em Conventional Commits em português, citando `Plano 1 · Task N`, assinados.
-- Branch `tarefa-<issue>` a partir da `origin/main` **atual** (`git fetch origin` antes), com rebase sobre `origin/main` antes do PR. PR pronto para revisão, não rascunho. Contrato completo em `automacao/cursor/PROMPT.md`.
+- Branch `tarefa-<issue>` a partir da `origin/main` **atual** (`git fetch origin` antes), com rebase sobre `origin/main` antes do PR. PR pronto para revisão, não rascunho. Nesta versão quem implementa são subagentes do Claude (`superpowers:subagent-driven-development`), sem issue; o contrato de um executor externo está em `automacao/cursor/PROMPT.md`.
+- Etiquetas no repositório em três famílias (spec, 4.2): ação `acao:<ação>`, agente `agente:<agente>` (uma por tipo de agente, nunca por conta) e estado/tipo (`em-andamento`, `precisa-humano`, `tarefa`, `melhoria`).
 
 ## Review Focus
 
@@ -169,6 +170,8 @@ class PassoGuia:
 
 class ProvedorDeAgente(Protocol):
     tipo: str; nome: str
+    etiqueta: str                      # nome do agente na etiqueta `agente:<etiqueta>`: "claude" (claude_local), "cursor"
+    modelos_sugeridos: list[str]       # claude_local: ["opus", "sonnet", "haiku"]; cursor: [] (a lista vem da API depois)
     campos: list[CampoCadastro]
     guia: list[PassoGuia]
     def testar(self, credenciais: dict[str, str], config: dict) -> ResultadoTeste: ...
@@ -205,6 +208,9 @@ def test_cursor_envia_chave_limpa():       # Review Focus 1
 def test_claude_local_aguarda_runner(): ...
 def test_testar_conta_grava_status(conta_factory): ...
 def test_tipo_desconhecido(): ...
+def test_etiqueta_e_modelos_dos_provedores():
+    assert obter_provedor("claude_local").etiqueta == "claude" and obter_provedor("cursor").etiqueta == "cursor"
+    assert obter_provedor("claude_local").modelos_sugeridos == ["opus", "sonnet", "haiku"]
 ```
 
 - [ ] **Step 2: Rodar e ver falhar.** Run: `uv run pytest tests/agentes -v`. Expected: FAIL.
@@ -223,7 +229,7 @@ def test_tipo_desconhecido(): ...
 **Interfaces:**
 - Consumes: Task 4.
 - Produces:
-  - `GET /api/tipos-de-agente/` → `[{tipo, nome, campos: [{chave, rotulo, secreto, ajuda, obrigatorio}], guia: [{texto, link}]}]`.
+  - `GET /api/tipos-de-agente/` → `[{tipo, nome, etiqueta, modelos_sugeridos, campos: [{chave, rotulo, secreto, ajuda, obrigatorio}], guia: [{texto, link}]}]`.
   - `GET|POST /api/contas-agente/`, `GET|PATCH|DELETE /api/contas-agente/{id}/`. Leitura: `{id, nome, tipo, cliente, config, limite_simultaneo, status, ultimo_teste_em, ultimo_teste_mensagem, tem_credenciais}`. Escrita: os mesmos campos editáveis mais `credenciais` (só de escrita; no PATCH, a ausência mantém o valor anterior).
   - `POST /api/contas-agente/testar/ {tipo, credenciais, config}` → `{ok, status, mensagem}`, sem gravar nada.
   - `POST /api/contas-agente/{id}/testar/` → `{ok, status, mensagem}`, gravando o status.
@@ -261,14 +267,16 @@ class ItemConferencia:
 class AdaptadorPlataforma(Protocol):
     def testar(self) -> ResultadoTeste: ...
     def listar_repositorios(self) -> list[Repositorio]: ...                       # todas as páginas
-    def conferir(self, repo: Repositorio, url_webhook: str) -> list[ItemConferencia]: ...
-    def preparar(self, repo: Repositorio, url_webhook: str) -> list[ItemConferencia]: ...  # idempotente
+    def conferir(self, repo: Repositorio, url_webhook: str, etiquetas: list[Etiqueta]) -> list[ItemConferencia]: ...
+    def preparar(self, repo: Repositorio, url_webhook: str, etiquetas: list[Etiqueta]) -> list[ItemConferencia]: ...  # idempotente
 
 def obter_adaptador(conexao: ConexaoPlataforma) -> AdaptadorPlataforma
 ```
 
   - `ConexaoPlataforma(PertenceADono)`: `nome`, `tipo` (`github` | `gitlab`), `url_base: str` (vazio no GitHub), `credenciais: CampoSecretoJSON`, `config: JSONField`, `status`, `ultimo_teste_mensagem`.
-  - `etiquetas.ETIQUETAS: list[Etiqueta(nome, cor, descricao)]`: `tarefa`, `em-andamento`, `em-revisao`, `correcao`, `precisa-humano`, `melhoria` (cores em hex sem `#`; descrições curtas em pt-BR).
+  - `etiquetas.Etiqueta(nome, cor, descricao)` (dataclass congelada; cor em hex sem `#`; descrição curta em pt-BR).
+  - `etiquetas.ETIQUETAS_FIXAS: list[Etiqueta]`: `acao:implementar`, `acao:revisar`, `acao:corrigir`, `em-andamento`, `precisa-humano`, `tarefa`, `melhoria`.
+  - `etiquetas.etiquetas_de_agentes(nomes: list[str]) -> list[Etiqueta]`: uma `agente:<nome>` por nome, sem repetir, na ordem alfabética, com a mesma cor para todas. O módulo `plataformas` não conhece os agentes: quem monta a lista completa é `projetos` (Task 8).
   - `GitHubAdaptador.token_de_instalacao() -> str`: JWT RS256 (`iat = agora - 60`, `exp = agora + 540`, `iss = app_id`) → `POST /app/installations/{installation_id}/access_tokens`. O Plano 3 usa este método para entregar tokens de curta duração.
   - Credenciais do GitHub, vindas da conversão do manifesto: `app_id`, `slug`, `pem`, `webhook_secret`, `client_id`, `client_secret`; `config.installation_id`.
 - Rotas:
@@ -276,9 +284,9 @@ def obter_adaptador(conexao: ConexaoPlataforma) -> AdaptadorPlataforma
   - `GET /api/conexoes-plataforma/github/retorno/?code&state` → `POST https://api.github.com/app-manifests/{code}/conversions`, grava a conexão e redireciona (302) para `https://github.com/apps/{slug}/installations/new?state=<s>`.
   - `GET /api/conexoes-plataforma/github/instalado/?installation_id&state` → grava `config.installation_id` e redireciona para `/plataformas` no front.
   - `GET /api/conexoes-plataforma/`, `GET|DELETE /api/conexoes-plataforma/{id}/`, `POST /api/conexoes-plataforma/{id}/testar/`, `GET /api/conexoes-plataforma/{id}/repositorios/`.
-- `conferir` (GitHub): `app_instalado_no_repo` (o repo está em `GET /installation/repositories`), `etiquetas` (todas as de `ETIQUETAS` existem), `webhook` (`GET /app/hook/config` com o JWT: a `url` bate com a esperada e `content_type` é `json`). `preparar`: cria as etiquetas que faltam (422 com `already_exists` conta como ok) e corrige `/app/hook/config` com `PATCH` se a URL estiver diferente. Instalação ausente não é consertável: a mensagem traz o link `https://github.com/apps/{slug}/installations/new`.
+- `conferir` (GitHub): `app_instalado_no_repo` (o repo está em `GET /installation/repositories`), `etiquetas` (todas as recebidas em `etiquetas` existem), `webhook` (`GET /app/hook/config` com o JWT: a `url` bate com a esperada e `content_type` é `json`). `preparar`: cria as etiquetas que faltam (422 com `already_exists` conta como ok) e corrige `/app/hook/config` com `PATCH` se a URL estiver diferente. Instalação ausente não é consertável: a mensagem traz o link `https://github.com/apps/{slug}/installations/new`.
 
-- [ ] **Step 1: Escrever os testes que falham** (todos com `respx`; a chave PEM de teste é gerada com `cryptography` na fixture): `test_manifesto_tem_webhook_e_permissoes`; `test_retorno_converte_e_grava_cifrado`; `test_retorno_com_state_invalido_da_400`; `test_instalado_grava_installation_id`; `test_token_de_instalacao_usa_jwt_rs256` (decodifica o JWT enviado com a chave pública da fixture e confere `iss`); `test_listar_repositorios_percorre_paginas` (header `Link` com `rel="next"`, 150 repositórios; Review Focus 4); `test_conferir_aponta_etiquetas_faltando`; `test_preparar_duas_vezes_nao_duplica` (o segundo POST de etiqueta responde 422 `already_exists`, e o resultado continua todo ok; Review Focus 2); `test_pem_mantem_quebras_internas`.
+- [ ] **Step 1: Escrever os testes que falham** (todos com `respx`; a chave PEM de teste é gerada com `cryptography` na fixture): `test_manifesto_tem_webhook_e_permissoes`; `test_retorno_converte_e_grava_cifrado`; `test_retorno_com_state_invalido_da_400`; `test_instalado_grava_installation_id`; `test_token_de_instalacao_usa_jwt_rs256` (decodifica o JWT enviado com a chave pública da fixture e confere `iss`); `test_listar_repositorios_percorre_paginas` (header `Link` com `rel="next"`, 150 repositórios; Review Focus 4); `test_conferir_aponta_etiquetas_faltando`; `test_etiquetas_de_agentes_sem_repeticao` (`["cursor", "claude", "cursor"]` → `agente:claude`, `agente:cursor`); `test_preparar_duas_vezes_nao_duplica` (o segundo POST de etiqueta responde 422 `already_exists`, e o resultado continua todo ok; Review Focus 2); `test_pem_mantem_quebras_internas`.
 - [ ] **Step 2: Rodar e ver falhar.** Run: `uv run pytest tests/plataformas -v`. Expected: FAIL.
 - [ ] **Step 3: Implementar** o modelo, o adaptador, o registro em `obter_adaptador` e as views.
 - [ ] **Step 4: Rodar e ver passar.** Expected: PASS.
@@ -293,7 +301,7 @@ def obter_adaptador(conexao: ConexaoPlataforma) -> AdaptadorPlataforma
 - Test: `backend/tests/plataformas/test_gitlab.py`
 
 **Interfaces:**
-- Consumes: Task 6 (`AdaptadorPlataforma`, `ItemConferencia`, `Repositorio`, `ETIQUETAS`, `ConexaoPlataforma`).
+- Consumes: Task 6 (`AdaptadorPlataforma`, `ItemConferencia`, `Repositorio`, `Etiqueta`, `ConexaoPlataforma`).
 - Produces:
   - `plataformas.servicos.normalizar_url_gitlab(texto: str) -> str`: devolve `https://host[/caminho]` sem barra no fim e sem `/api/v4`; sem esquema, assume `https://`. Exemplos que viram `https://gitlab.unilab.edu.br`: `gitlab.unilab.edu.br`, `https://gitlab.unilab.edu.br/`, `https://gitlab.unilab.edu.br/api/v4`.
   - `POST /api/conexoes-plataforma/gitlab/ {nome, url_base, token}`: limpa o token, testa e só grava se o teste passar; caso contrário, `400 {"detail": <mensagem do teste>}`. Gera `webhook_secret = secrets.token_urlsafe(32)` nas credenciais.
@@ -320,11 +328,12 @@ def obter_adaptador(conexao: ConexaoPlataforma) -> AdaptadorPlataforma
 - Consumes: `obter_adaptador`, `Repositorio`, `ItemConferencia` (Task 6), `Cliente` (Task 4), `Predefinicao` (Task 9; o FK entra aqui como `null=True` e a validação de contas, na Task 9).
 - Produces:
   - `Projeto(PertenceADono)`: `nome`, `conexao: FK[ConexaoPlataforma]`, `repositorio_caminho`, `repositorio_id_externo`, `repositorio_url`, `cliente: FK[Cliente] | None`, `predefinicao: FK[Predefinicao] | None`, `ativo: bool = True`, `ultima_conferencia: JSONField(default=list)`, `ultima_conferencia_em`. Único por (`dono`, `conexao`, `repositorio_id_externo`).
+  - `projetos.servicos.etiquetas_do_projeto() -> list[Etiqueta]`: `ETIQUETAS_FIXAS` + `etiquetas_de_agentes([p.etiqueta for p in REGISTRO.values()])`. É a lista que `conferir_projeto` e `preparar_projeto` passam ao adaptador.
   - `projetos.servicos.url_webhook(projeto) -> str`; `conferir_projeto(projeto) -> list[ItemConferencia]` e `preparar_projeto(projeto) -> list[ItemConferencia]`, que gravam o resultado em `ultima_conferencia`.
   - `POST /api/projetos/ {nome, conexao, repositorio_id_externo, cliente?, predefinicao?}`: busca o repositório na listagem do adaptador (`400` se não estiver acessível), cria o projeto e roda `preparar_projeto` na hora. A resposta traz `conferencia`.
   - `GET /api/projetos/`, `GET|PATCH|DELETE /api/projetos/{id}/`, `POST /api/projetos/{id}/conferir/`, `POST /api/projetos/{id}/preparar/` → `{itens: [ItemConferencia], conferido_em}`.
 
-- [ ] **Step 1: Escrever os testes que falham** (com um adaptador falso registrado pelo teste): `test_criar_projeto_ja_prepara`; `test_conferir_grava_resultado`; `test_repositorio_inacessivel_da_400`; `test_projeto_de_outro_dono_da_404`; `test_conexao_de_outro_dono_da_400`.
+- [ ] **Step 1: Escrever os testes que falham** (com um adaptador falso registrado pelo teste): `test_criar_projeto_ja_prepara`; `test_preparar_inclui_etiquetas_de_todos_os_agentes` (o adaptador falso recebe `agente:claude` e `agente:cursor` além das fixas); `test_conferir_grava_resultado`; `test_repositorio_inacessivel_da_400`; `test_projeto_de_outro_dono_da_404`; `test_conexao_de_outro_dono_da_400`.
 - [ ] **Step 2: Rodar e ver falhar.** Expected: FAIL.
 - [ ] **Step 3: Implementar.**
 - [ ] **Step 4: Rodar e ver passar.** Expected: PASS.
@@ -345,14 +354,15 @@ Só a configuração. Quem executa as etapas é o Plano 3.
 - Consumes: `ContaAgente`, `Cliente`.
 - Produces:
   - `fluxos.servicos.ETAPAS = ["publicar_tasks", "implementar", "revisar", "merge", "promover"]` (a ordem padrão) e `GATILHOS = ["anterior_concluida", "webhook", "temporizador", "decisao_humana"]`.
-  - `Predefinicao(PertenceADono)`: `nome`, `descricao`, `etapas: JSONField` (lista de `{chave, papel: {"tipo": "conta", "conta_id": "<uuid>"} | {"tipo": "humano"} | {"tipo": "central"}, gatilho, temporizador_minutos?}`), `merge_autonomo: bool = True`.
-  - `fluxos.servicos.validar_etapas(dono, etapas) -> list[str]` (erros em pt-BR). Regras: chaves conhecidas e sem repetição; `implementar` e `revisar` exigem `papel.tipo == "conta"` com uma conta do mesmo dono; `promover` exige `"humano"`; `publicar_tasks` e `merge` usam `"central"`; `temporizador` exige `temporizador_minutos >= 1`.
+  - `fluxos.metodos.Metodo(chave, nome, pasta_specs, pasta_planos)` (dataclass congelada) e `METODOS: dict[str, Metodo]`, no MVP só `"superpowers"` → `Metodo("superpowers", "superpowers", "docs/superpowers/specs", "docs/superpowers/plans")`. O comando de cada etapa por método é do Plano 3.
+  - `Predefinicao(PertenceADono)`: `nome`, `descricao`, `metodo: str = "superpowers"`, `etapas: JSONField` (lista de `{chave, papel: {"tipo": "conta", "conta_id": "<uuid>", "modelo": "<texto opcional>"} | {"tipo": "humano"} | {"tipo": "central"}, gatilho, temporizador_minutos?}`), `merge_autonomo: bool = True`. `modelo` vazio ou ausente usa o padrão da conta.
+  - `fluxos.servicos.validar_etapas(dono, etapas) -> list[str]` (erros em pt-BR). Regras: chaves conhecidas e sem repetição; `implementar` e `revisar` exigem `papel.tipo == "conta"` com uma conta do mesmo dono; `promover` exige `"humano"`; `publicar_tasks` e `merge` usam `"central"`; `temporizador` exige `temporizador_minutos >= 1`; `modelo`, quando vier, é texto de até 64 caracteres. O `metodo` da predefinição precisa estar em `METODOS` (`"Método desconhecido: <x>."`).
   - `fluxos.servicos.criar_padrao(dono, executor: ContaAgente, revisor: ContaAgente) -> Predefinicao`: o "Padrão" da spec (4.3), com as cinco etapas na ordem, `implementar` → executor, `revisar` → revisor, gatilho `anterior_concluida`, `promover` com `decisao_humana` e `merge_autonomo=True`.
   - `fluxos.servicos.duplicar(predefinicao, nome) -> Predefinicao`.
   - `projetos.servicos.validar_contas_do_projeto(projeto, predefinicao) -> list[str]`: toda conta usada precisa ter `conta.cliente` em (`None`, `projeto.cliente`); senão `"A conta <nome> é do cliente <X> e não pode trabalhar neste projeto."`. É chamada no `POST`/`PATCH` de projeto e no `PATCH` de predefinição (para cada projeto que a usa).
-  - API: `GET|POST /api/predefinicoes/`, `GET|PATCH|DELETE /api/predefinicoes/{id}/`, `POST /api/predefinicoes/padrao/ {executor, revisor}`, `POST /api/predefinicoes/{id}/duplicar/ {nome}`, `GET /api/etapas-e-gatilhos/` (os rótulos em pt-BR para o front). Apagar uma predefinição em uso dá `400 "Esta predefinição é usada por N projeto(s)."`.
+  - API: `GET|POST /api/predefinicoes/`, `GET|PATCH|DELETE /api/predefinicoes/{id}/`, `POST /api/predefinicoes/padrao/ {executor, revisor}`, `POST /api/predefinicoes/{id}/duplicar/ {nome}`, `GET /api/etapas-e-gatilhos/` (os rótulos em pt-BR das etapas, dos gatilhos e dos métodos, para o front). Apagar uma predefinição em uso dá `400 "Esta predefinição é usada por N projeto(s)."`.
 
-- [ ] **Step 1: Escrever os testes que falham:** `test_padrao_tem_as_cinco_etapas_na_ordem`; `test_implementar_sem_conta_da_erro`; `test_conta_de_outro_dono_da_erro`; `test_promover_exige_humano`; `test_temporizador_sem_minutos_da_erro`; `test_duplicar_copia_etapas`; `test_conta_de_cliente_y_em_projeto_do_cliente_x_e_recusada`; `test_conta_do_dono_vale_em_projeto_de_cliente`; `test_patch_da_predefinicao_valida_projetos_que_usam`; `test_apagar_em_uso_da_400`.
+- [ ] **Step 1: Escrever os testes que falham:** `test_padrao_tem_as_cinco_etapas_na_ordem`; `test_implementar_sem_conta_da_erro`; `test_conta_de_outro_dono_da_erro`; `test_promover_exige_humano`; `test_temporizador_sem_minutos_da_erro`; `test_metodo_desconhecido_da_erro`; `test_modelo_e_opcional_e_fica_gravado`; `test_duplicar_copia_etapas`; `test_conta_de_cliente_y_em_projeto_do_cliente_x_e_recusada`; `test_conta_do_dono_vale_em_projeto_de_cliente`; `test_patch_da_predefinicao_valida_projetos_que_usam`; `test_apagar_em_uso_da_400`.
 - [ ] **Step 2: Rodar e ver falhar.** Expected: FAIL.
 - [ ] **Step 3: Implementar.**
 - [ ] **Step 4: Rodar e ver passar.** Expected: PASS.
@@ -462,11 +472,11 @@ Só recebe, verifica e guarda. Quem processa é o Plano 3.
 - Comportamento:
   - A lista mostra as predefinições e quantos projetos usam cada uma.
   - "Criar a partir do Padrão" pede o executor e o revisor (selects com as contas).
-  - O editor mostra as etapas na ordem, cada uma com o rótulo, o papel (conta, humano ou central, conforme a regra da etapa) e o gatilho (com os minutos quando for `temporizador`), e a chave "Merge autônomo / com ok humano". Dá para ativar e desativar etapas e reordená-las com botões subir e descer.
+  - O editor mostra o método (select; no MVP só superpowers) e as etapas na ordem, cada uma com o rótulo, o papel (conta, humano ou central, conforme a regra da etapa), o modelo quando o papel é uma conta (campo livre que sugere os `modelos_sugeridos` do tipo da conta; vazio = padrão da conta) e o gatilho (com os minutos quando for `temporizador`), e a chave "Merge autônomo / com ok humano". Dá para ativar e desativar etapas e reordená-las com botões subir e descer.
   - Os erros de validação do servidor aparecem junto da etapa. Ao salvar uma predefinição em uso, o aviso diz "Vale na hora para N projeto(s), a partir da próxima etapa de cada um."
   - Botão Duplicar.
 
-- [ ] **Step 1: Escrever os testes que falham:** `criar a partir do padrão pede executor e revisor`; `promover só oferece humano`; `mostra o aviso de N projetos ao salvar`; `erro do servidor aparece na etapa`.
+- [ ] **Step 1: Escrever os testes que falham:** `criar a partir do padrão pede executor e revisor`; `promover só oferece humano`; `modelo sugere os do tipo da conta`; `mostra o aviso de N projetos ao salvar`; `erro do servidor aparece na etapa`.
 - [ ] **Step 2: Rodar e ver falhar.** Expected: FAIL.
 - [ ] **Step 3: Implementar.**
 - [ ] **Step 4: Rodar e ver passar.** Expected: PASS.
