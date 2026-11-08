@@ -71,18 +71,66 @@ def test_listar_repositorios_percorre_paginas(conexao_github):
 
 
 @respx.mock
-def test_listar_nao_segue_link_para_outro_host(conexao_github):
+@pytest.mark.parametrize(
+    "destino",
+    ["https://malicioso.exemplo/roubo", "http://api.github.com/installation/repositories"],
+)
+def test_listar_nao_segue_link_para_outro_host_nem_http(conexao_github, destino):
     _token_ok()
     respx.get(f"{API}/installation/repositories").respond(
         200,
         json={"repositories": [_repo_json(1)]},
-        headers={"Link": '<https://malicioso.exemplo/roubo>; rel="next"'},
+        headers={"Link": f'<{destino}>; rel="next"'},
     )
     desvio = respx.route(host="malicioso.exemplo").respond(200, json={})
+    http = respx.route(scheme="http").respond(200, json={"repositories": []})
 
-    repos = obter_adaptador(conexao_github).listar_repositorios()
+    with pytest.raises(ErroDePlataforma, match="endereço inesperado"):
+        obter_adaptador(conexao_github).listar_repositorios()
 
-    assert len(repos) == 1 and not desvio.called
+    assert not desvio.called and not http.called
+
+
+@respx.mock
+def test_listar_chegando_ao_limite_de_paginas_levanta_erro(conexao_github, monkeypatch):
+    from apps.plataformas.adaptadores import github
+
+    monkeypatch.setattr(github, "MAX_PAGINAS", 3)
+    _token_ok()
+    proxima = f"{API}/installation/repositories?per_page=100&page=2"
+    rota = respx.get(f"{API}/installation/repositories").respond(
+        200, json={"repositories": []}, headers={"Link": f'<{proxima}>; rel="next"'}
+    )
+
+    with pytest.raises(ErroDePlataforma, match="grande demais"):
+        obter_adaptador(conexao_github).listar_repositorios()
+
+    assert rota.call_count == 3
+
+
+@respx.mock
+@pytest.mark.parametrize(
+    "resposta",
+    [
+        httpx.Response(403, headers={"x-ratelimit-remaining": "0"}),
+        httpx.Response(429),
+    ],
+)
+def test_limite_de_chamadas_tem_mensagem_propria(conexao_github, resposta):
+    respx.post(URL_TOKEN).mock(return_value=resposta)
+
+    r = obter_adaptador(conexao_github).testar()
+
+    assert not r.ok
+    assert r.mensagem == (
+        "O GitHub limitou as chamadas por enquanto. Tente de novo em alguns minutos."
+    )
+
+
+@respx.mock
+def test_403_sem_limite_continua_sendo_credencial_recusada(conexao_github):
+    respx.post(URL_TOKEN).respond(403, headers={"x-ratelimit-remaining": "42"})
+    assert "recusou as credenciais" in obter_adaptador(conexao_github).testar().mensagem
 
 
 def _mock_conferencia(*, repos, etiquetas_existentes, hook):

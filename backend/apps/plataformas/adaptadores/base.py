@@ -8,7 +8,13 @@ from ..etiquetas import Etiqueta
 
 class ErroDePlataforma(Exception):
     """Falha ao falar com a plataforma. A mensagem é pt-BR, pronta para mostrar, e nunca
-    leva segredo nem o corpo da resposta da plataforma."""
+    leva segredo nem o corpo da resposta da plataforma.
+
+    `codigo` é um dos códigos de `erros.MENSAGENS_DE_ERRO`, usado nos redirecionamentos."""
+
+    def __init__(self, mensagem: str, codigo: str = "github_fora_do_ar"):
+        super().__init__(mensagem)
+        self.codigo = codigo
 
 
 @dataclass(frozen=True)

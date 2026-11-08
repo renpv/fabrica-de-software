@@ -2,7 +2,7 @@ from dataclasses import asdict
 
 from django.http import HttpResponseRedirect
 from drf_spectacular.utils import OpenApiParameter, extend_schema
-from rest_framework import mixins, viewsets
+from rest_framework import exceptions, mixins, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -25,16 +25,26 @@ from .serializers import (
     TesteDaConexaoSerializer,
 )
 
-_ERROS = {400: ErroSerializer, 502: ErroSerializer}
 
-
-def _erro(erro: servicos.ErroDeFluxo | servicos.ErroDePlataforma) -> Response:
-    return Response({"detail": str(erro)}, status=getattr(erro, "status", 502))
+def _erro(erro: servicos.ErroDePlataforma) -> Response:
+    return Response({"detail": str(erro)}, status=502)
 
 
 class _ViewDoDono(APIView):
     authentication_classes = [SessaoAutenticacao]
     permission_classes = [IsAuthenticated, TemDono]
+
+
+class _RetornoDoGitHubView(_ViewDoDono):
+    """Base das rotas em que o navegador volta do GitHub: nunca mostram JSON de erro.
+
+    Qualquer falha vira 302 para a tela de plataformas com `?erro=<código fixo>`.
+    """
+
+    def handle_exception(self, exc):
+        if isinstance(exc, exceptions.NotAuthenticated | exceptions.PermissionDenied):
+            return HttpResponseRedirect(servicos.url_de_erro("sem_login"))
+        return super().handle_exception(exc)
 
 
 class ManifestoGitHubView(_ViewDoDono):
@@ -61,7 +71,7 @@ def _validar_consulta(serializer_class, request):
     return consulta.validated_data
 
 
-class RetornoGitHubView(_ViewDoDono):
+class RetornoGitHubView(_RetornoDoGitHubView):
     """Volta do GitHub depois de criar o App: converte o código e leva para instalar."""
 
     @extend_schema(
@@ -69,21 +79,21 @@ class RetornoGitHubView(_ViewDoDono):
             OpenApiParameter("code", str, required=True),
             OpenApiParameter("state", str, required=True),
         ],
-        responses={302: None, **_ERROS},
+        responses={302: None},
         operation_id="conexoes_plataforma_github_retorno",
     )
     def get(self, request):
         dados = _validar_consulta(RetornoGitHubSerializer, request)
         if dados is None:
-            return Response({"detail": servicos.MENSAGEM_STATE}, status=400)
+            return HttpResponseRedirect(servicos.url_de_erro("estado_invalido"))
         try:
             destino = servicos.concluir_manifesto(request.dono, dados["code"], dados["state"])
         except servicos.ErroDeFluxo as erro:
-            return _erro(erro)
+            return HttpResponseRedirect(servicos.url_de_erro(erro.codigo))
         return HttpResponseRedirect(destino)
 
 
-class InstaladoGitHubView(_ViewDoDono):
+class InstaladoGitHubView(_RetornoDoGitHubView):
     """Volta do GitHub depois de instalar o App: grava a instalação e abre a tela no front."""
 
     @extend_schema(
@@ -91,19 +101,19 @@ class InstaladoGitHubView(_ViewDoDono):
             OpenApiParameter("installation_id", str, required=True),
             OpenApiParameter("state", str, required=True),
         ],
-        responses={302: None, **_ERROS},
+        responses={302: None},
         operation_id="conexoes_plataforma_github_instalado",
     )
     def get(self, request):
         dados = _validar_consulta(InstaladoGitHubSerializer, request)
         if dados is None:
-            return Response({"detail": servicos.MENSAGEM_STATE}, status=400)
+            return HttpResponseRedirect(servicos.url_de_erro("estado_invalido"))
         try:
             destino = servicos.concluir_instalacao(
                 request.dono, dados["installation_id"], dados["state"]
             )
         except servicos.ErroDeFluxo as erro:
-            return _erro(erro)
+            return HttpResponseRedirect(servicos.url_de_erro(erro.codigo))
         return HttpResponseRedirect(destino)
 
 

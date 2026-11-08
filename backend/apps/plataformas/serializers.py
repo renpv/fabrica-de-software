@@ -21,7 +21,14 @@ class ConexaoPlataformaSerializer(serializers.ModelSerializer):
 
 
 class ManifestoPedidoSerializer(serializers.Serializer):
-    nome = serializers.CharField(max_length=100)
+    # O GitHub limita o nome do App a 34 caracteres; o prefixo "Fabrica " ocupa 8.
+    nome = serializers.CharField(
+        max_length=26,
+        error_messages={
+            "max_length": "Use até 26 caracteres: o GitHub limita o nome do App a 34 e a "
+            "central acrescenta «Fabrica » na frente."
+        },
+    )
 
 
 class ManifestoRespostaSerializer(serializers.Serializer):

@@ -1,3 +1,4 @@
+import secrets
 from urllib.parse import parse_qs, urlparse
 
 import httpx
@@ -30,6 +31,16 @@ def _state(client, nome="Central"):
     assert r.status_code == 200, r.content
     acao = r.json()["acao"]
     return parse_qs(urlparse(acao).query)["state"][0]
+
+
+def _erro(r):
+    """Código do `?erro=` do redirecionamento de falha (confere o destino exato)."""
+    assert r.status_code == 302, (r.status_code, r.content[:200])
+    destino = urlparse(r["Location"])
+    assert (
+        f"{destino.scheme}://{destino.netloc}{destino.path}" == "http://localhost:8000/plataformas"
+    )
+    return parse_qs(destino.query)["erro"][0]
 
 
 def _conversao(pem, **extra):
@@ -128,8 +139,7 @@ def test_retorno_com_state_invalido_da_400(client, logado, chaves_rsa):
 
     for state in ["lixo", "", signing.dumps({"d": str(logado.dono.id)}, salt="outro-sal")]:
         r = client.get(f"{BASE}github/retorno/", {"code": "CODIGO123", "state": state})
-        assert r.status_code == 400, state
-        assert "detail" in r.json()
+        assert _erro(r) == "estado_invalido", state
     assert not rota.called
     assert not ConexaoPlataforma.objects.exists()
 
@@ -146,7 +156,7 @@ def test_retorno_com_state_de_outro_dono_da_400(client, logado, chaves_rsa, db):
 
     r = client.get(f"{BASE}github/retorno/", {"code": "CODIGO123", "state": alheio})
 
-    assert r.status_code == 400
+    assert _erro(r) == "estado_invalido"
     assert not rota.called and not ConexaoPlataforma.objects.exists()
 
 
@@ -160,24 +170,25 @@ def test_retorno_com_state_expirado_da_400(client, logado, chaves_rsa, monkeypat
 
     r = client.get(f"{BASE}github/retorno/", {"code": "CODIGO123", "state": state})
 
-    assert r.status_code == 400 and not rota.called
+    assert _erro(r) == "estado_invalido" and not rota.called
 
 
 @respx.mock
-def test_retorno_sem_login_ou_sem_dono_recusa(client, logado, chaves_rsa, django_user_model):
+def test_retorno_sem_login_ou_sem_dono_redireciona_com_sem_login(
+    client, logado, chaves_rsa, django_user_model
+):
     rota = respx.post(URL_CONVERSAO).respond(201, json=_conversao(chaves_rsa[0]))
     state = _state(client)
     client.logout()
-    assert (
-        client.get(f"{BASE}github/retorno/", {"code": "CODIGO123", "state": state}).status_code
-        == 403
-    )
+    for rota_do_fluxo in ("retorno", "instalado"):
+        r = client.get(
+            f"{BASE}github/{rota_do_fluxo}/", {"code": "C", "installation_id": "1", "state": state}
+        )
+        assert _erro(r) == "sem_login"
     sem_dono = django_user_model.objects.create_user(username="semdono", password="x-x-x-x-x1")
     client.force_login(sem_dono)
-    assert (
-        client.get(f"{BASE}github/retorno/", {"code": "CODIGO123", "state": state}).status_code
-        == 403
-    )
+    r = client.get(f"{BASE}github/retorno/", {"code": "CODIGO123", "state": state})
+    assert _erro(r) == "sem_login"
     assert not rota.called
 
 
@@ -185,27 +196,43 @@ def test_retorno_sem_login_ou_sem_dono_recusa(client, logado, chaves_rsa, django
 def test_retorno_codigo_com_caracteres_estranhos_da_400(client, logado):
     state = _state(client)
     r = client.get(f"{BASE}github/retorno/", {"code": "../../x?y=1", "state": state})
-    assert r.status_code == 400 and not ConexaoPlataforma.objects.exists()
+    assert _erro(r) == "conversao_falhou" and not ConexaoPlataforma.objects.exists()
 
 
 @respx.mock
 def test_retorno_erros_do_github_viram_mensagem_sem_segredo(client, logado, chaves_rsa):
-    state = _state(client)
     casos = [
-        httpx.Response(404, json={"message": "Not Found " + chaves_rsa[0]}),
-        httpx.Response(500, text=chaves_rsa[0]),
-        httpx.Response(201, json={"id": 1, "slug": "../evil", "pem": chaves_rsa[0]}),
-        httpx.Response(201, json=_conversao(chaves_rsa[0], slug="Slug Invalido/x")),
-        httpx.Response(201, text="nao e json " + chaves_rsa[0]),
-        httpx.ConnectTimeout("lento"),
+        (httpx.Response(404, json={"message": "Not Found " + chaves_rsa[0]}), "conversao_falhou"),
+        (httpx.Response(500, text=chaves_rsa[0]), "github_fora_do_ar"),
+        (
+            httpx.Response(201, json={"id": 1, "slug": "../evil", "pem": chaves_rsa[0]}),
+            "conversao_falhou",
+        ),
+        (
+            httpx.Response(201, json=_conversao(chaves_rsa[0], slug="Slug Invalido/x")),
+            "conversao_falhou",
+        ),
+        (httpx.Response(201, text="nao e json " + chaves_rsa[0]), "conversao_falhou"),
+        (
+            httpx.Response(403, headers={"x-ratelimit-remaining": "0"}, text=chaves_rsa[0]),
+            "github_fora_do_ar",
+        ),
+        (httpx.ConnectTimeout("lento"), "github_fora_do_ar"),
     ]
-    for caso in casos:
+    for caso, codigo in casos:
         respx.post(URL_CONVERSAO).mock(side_effect=caso if isinstance(caso, Exception) else [caso])
-        r = client.get(f"{BASE}github/retorno/", {"code": "CODIGO123", "state": state})
-        assert r.status_code in (400, 502), (caso, r.status_code)
-        assert "BEGIN" not in r.content.decode()
-        assert "detail" in r.json()
+        r = client.get(f"{BASE}github/retorno/", {"code": "CODIGO123", "state": _state(client)})
+        assert _erro(r) == codigo, caso
+        assert "BEGIN" not in r["Location"] and "BEGIN" not in r.content.decode()
         assert not ConexaoPlataforma.objects.exists()
+
+
+def _state_instalacao(dono, conexao):
+    """State de instalação novo (nonce próprio) para a conexão."""
+    return signing.dumps(
+        {"d": str(dono.id), "n": secrets.token_urlsafe(8), "c": str(conexao.id)},
+        salt="plataformas.github.instalacao",
+    )
 
 
 def _conexao_para_instalar(client, chaves_rsa):
@@ -239,7 +266,7 @@ def test_instalado_de_outro_app_nao_grava(client, logado, chaves_rsa):
 
     r = client.get(f"{BASE}github/instalado/", {"installation_id": "555", "state": state})
 
-    assert r.status_code == 400
+    assert _erro(r) == "instalacao_invalida"
     conexao.refresh_from_db()
     assert conexao.config == {}
 
@@ -247,13 +274,18 @@ def test_instalado_de_outro_app_nao_grava(client, logado, chaves_rsa):
 @respx.mock
 def test_instalado_inexistente_ou_com_erro_nao_grava(client, logado, chaves_rsa):
     state, conexao = _conexao_para_instalar(client, chaves_rsa)
-    for resposta in [httpx.Response(404, json={}), httpx.Response(500), httpx.ConnectError("x")]:
+    casos = [
+        (httpx.Response(404, json={}), "instalacao_invalida"),
+        (httpx.Response(500), "github_fora_do_ar"),
+        (httpx.ConnectError("x"), "github_fora_do_ar"),
+    ]
+    for resposta, codigo in casos:
         respx.get(f"{API}/app/installations/555").mock(
             side_effect=resposta if isinstance(resposta, Exception) else [resposta]
         )
+        state = _state_instalacao(logado.dono, conexao)
         r = client.get(f"{BASE}github/instalado/", {"installation_id": "555", "state": state})
-        assert r.status_code in (400, 502)
-        assert "detail" in r.json()
+        assert _erro(r) == codigo
     conexao.refresh_from_db()
     assert conexao.config == {}
 
@@ -274,9 +306,9 @@ def test_instalado_state_invalido_ou_alheio_ou_id_ruim_da_400(client, logado, ch
     )
     for s in ["lixo", alheio, do_manifesto]:
         r = client.get(f"{BASE}github/instalado/", {"installation_id": "555", "state": s})
-        assert r.status_code == 400, s
+        assert _erro(r) == "estado_invalido", s
     r = client.get(f"{BASE}github/instalado/", {"installation_id": "5/../x", "state": state})
-    assert r.status_code == 400
+    assert _erro(r) == "instalacao_invalida"
     assert not rota.called
     conexao.refresh_from_db()
     assert conexao.config == {}
@@ -293,7 +325,7 @@ def test_instalado_conexao_de_outro_dono_da_400(client, logado, chaves_rsa, cone
 
     r = client.get(f"{BASE}github/instalado/", {"installation_id": "555", "state": state})
 
-    assert r.status_code == 400 and not rota.called
+    assert _erro(r) == "estado_invalido" and not rota.called
     conexao_github.refresh_from_db()
     assert conexao_github.config == {"installation_id": "777"}
 
@@ -364,7 +396,7 @@ def test_resposta_nunca_tem_credenciais(client, logado, chaves_rsa):
     vistas = []
 
     def conferir(r):
-        corpo = r.content.decode()
+        corpo = r.content.decode() + r.get("Location", "")
         for segredo in [*SEGREDOS, "BEGIN", "ghs_token_secreto"]:
             assert segredo not in corpo, (segredo, r.status_code)
         vistas.append(r.status_code)
@@ -390,5 +422,85 @@ def test_resposta_nunca_tem_credenciais(client, logado, chaves_rsa):
     conferir(client.get(f"{BASE}github/instalado/", {"installation_id": "555", "state": "lixo"}))
     respx.post(URL_CONVERSAO).respond(404, json={"message": chaves_rsa[0]})
     conferir(client.get(f"{BASE}github/retorno/", {"code": "CODIGO123", "state": _state(client)}))
-    assert {200, 302, 400, 502} & set(vistas)
-    assert 400 in vistas and 200 in vistas and 302 in vistas
+    assert 200 in vistas and 302 in vistas
+
+
+@respx.mock
+def test_state_do_manifesto_vale_uma_vez(client, logado, chaves_rsa):
+    rota = respx.post(URL_CONVERSAO).respond(201, json=_conversao(chaves_rsa[0]))
+    state = _state(client)
+
+    primeira = client.get(f"{BASE}github/retorno/", {"code": "CODIGO123", "state": state})
+    segunda = client.get(f"{BASE}github/retorno/", {"code": "OUTRO456", "state": state})
+
+    assert primeira["Location"].startswith("https://github.com/apps/")
+    assert _erro(segunda) == "estado_invalido"
+    assert rota.call_count == 1 and ConexaoPlataforma.objects.count() == 1
+
+
+@respx.mock
+def test_state_de_instalacao_vale_uma_vez(client, logado, chaves_rsa):
+    state, conexao = _conexao_para_instalar(client, chaves_rsa)
+    respx.get(f"{API}/app/installations/555").respond(200, json={"app_id": 321})
+
+    primeira = client.get(f"{BASE}github/instalado/", {"installation_id": "555", "state": state})
+    segunda = client.get(f"{BASE}github/instalado/", {"installation_id": "666", "state": state})
+
+    assert primeira["Location"] == "http://localhost:8000/plataformas"
+    assert _erro(segunda) == "estado_invalido"
+    conexao.refresh_from_db()
+    assert conexao.config["installation_id"] == "555"
+
+
+@respx.mock
+def test_instalado_com_github_fora_do_ar_libera_o_state_para_nova_tentativa(
+    client, logado, chaves_rsa
+):
+    state, conexao = _conexao_para_instalar(client, chaves_rsa)
+    rota = respx.get(f"{API}/app/installations/555")
+    rota.mock(side_effect=[httpx.Response(500), httpx.Response(200, json={"app_id": 321})])
+
+    primeira = client.get(f"{BASE}github/instalado/", {"installation_id": "555", "state": state})
+    segunda = client.get(f"{BASE}github/instalado/", {"installation_id": "555", "state": state})
+
+    assert _erro(primeira) == "github_fora_do_ar"
+    assert segunda["Location"] == "http://localhost:8000/plataformas"
+
+
+@respx.mock
+def test_falha_ao_salvar_depois_da_conversao_avisa_para_apagar_o_app(
+    client, logado, chaves_rsa, monkeypatch
+):
+    respx.post(URL_CONVERSAO).respond(201, json=_conversao(chaves_rsa[0]))
+
+    def quebra(*args, **kwargs):
+        raise RuntimeError("banco fora " + chaves_rsa[0])
+
+    monkeypatch.setattr(ConexaoPlataforma.objects, "create", quebra)
+
+    r = client.get(f"{BASE}github/retorno/", {"code": "CODIGO123", "state": _state(client)})
+
+    assert _erro(r) == "conversao_sem_registro"
+    assert "BEGIN" not in r["Location"]
+    from apps.plataformas.erros import MENSAGENS_DE_ERRO
+
+    assert "https://github.com/settings/apps" in MENSAGENS_DE_ERRO["conversao_sem_registro"]
+
+
+def test_mensagens_de_erro_cobrem_os_codigos_do_fluxo():
+    from apps.plataformas.erros import MENSAGENS_DE_ERRO
+
+    assert set(MENSAGENS_DE_ERRO) == {
+        "sem_login", "estado_invalido", "conversao_falhou", "conversao_sem_registro",
+        "instalacao_invalida", "github_fora_do_ar",
+    }  # fmt: skip
+    assert all(m.endswith(".") for m in MENSAGENS_DE_ERRO.values())
+
+
+def test_nome_do_app_tem_ate_26_caracteres(client, logado):
+    ok = _json(client, "post", f"{BASE}github/manifesto/", {"nome": "a" * 26})
+    longo = _json(client, "post", f"{BASE}github/manifesto/", {"nome": "a" * 27})
+
+    assert ok.status_code == 200 and len(ok.json()["manifesto"]["name"]) == 34
+    assert longo.status_code == 400
+    assert "26" in longo.json()["nome"][0]

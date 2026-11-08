@@ -24,7 +24,22 @@ SLUG_VALIDO = re.compile(r"^[a-z0-9-]+$")
 
 MSG_REDE = "Não consegui falar com o GitHub agora. Tente de novo em instantes."
 MSG_CHAVE = "A chave privada do App do GitHub está inválida. Remova esta conexão e crie-a de novo."
+MSG_LIMITE = "O GitHub limitou as chamadas por enquanto. Tente de novo em alguns minutos."
 MSG_RECUSADO = "O GitHub recusou as credenciais do App. Remova esta conexão e crie-a de novo."
+
+
+def erro_de_status(resposta) -> ErroDePlataforma:
+    """Traduz um status HTTP inesperado em mensagem pt-BR (sem o corpo da resposta)."""
+    limite_estourado = (
+        resposta.status_code == 403 and resposta.headers.get("x-ratelimit-remaining") == "0"
+    )
+    if resposta.status_code == 429 or limite_estourado:
+        return ErroDePlataforma(MSG_LIMITE)
+    if resposta.status_code in (401, 403):
+        return ErroDePlataforma(MSG_RECUSADO)
+    return ErroDePlataforma(
+        f"O GitHub respondeu com erro (HTTP {resposta.status_code}). Tente de novo em instantes."
+    )
 
 
 def link_de_instalacao(slug: str) -> str:
@@ -57,15 +72,14 @@ def converter_manifesto(codigo: str) -> dict[str, str]:
     if resposta.status_code in (404, 422):
         raise ErroDePlataforma(
             "O GitHub não aceitou o código de criação do App (ele expira em 1 hora e vale uma "
-            "vez só). Comece de novo e crie o App outra vez."
+            "vez só). Comece de novo e crie o App outra vez.",
+            "conversao_falhou",
         )
     if resposta.status_code not in (200, 201):
-        raise ErroDePlataforma(
-            f"O GitHub respondeu com erro (HTTP {resposta.status_code}) ao criar o App. "
-            "Tente de novo em instantes."
-        )
+        raise erro_de_status(resposta)
     inesperada = ErroDePlataforma(
-        "O GitHub devolveu uma resposta inesperada ao criar o App. Comece de novo."
+        "O GitHub devolveu uma resposta inesperada ao criar o App. Comece de novo.",
+        "conversao_falhou",
     )
     try:
         dados = resposta.json()
@@ -140,18 +154,13 @@ class GitHubAdaptador:
         resposta = _requisitar(
             "POST", f"{API}/app/installations/{self._installation_id}/access_tokens", self._jwt()
         )
-        if resposta.status_code in (401, 403):
-            raise ErroDePlataforma(MSG_RECUSADO)
         if resposta.status_code == 404:
             raise ErroDePlataforma(
                 "A instalação do App no GitHub não existe mais. Remova esta conexão e "
                 "crie-a de novo."
             )
         if resposta.status_code not in (200, 201):
-            raise ErroDePlataforma(
-                f"O GitHub respondeu com erro (HTTP {resposta.status_code}). "
-                "Tente de novo em instantes."
-            )
+            raise erro_de_status(resposta)
         try:
             token = resposta.json().get("token")
         except ValueError, AttributeError:
@@ -169,15 +178,10 @@ class GitHubAdaptador:
     def instalacao_pertence_ao_app(self, installation_id: str) -> bool:
         """Confere, com o JWT do App, que a instalação é deste App (e não de outro)."""
         resposta = _requisitar("GET", f"{API}/app/installations/{installation_id}", self._jwt())
-        if resposta.status_code in (401, 403):
-            raise ErroDePlataforma(MSG_RECUSADO)
         if resposta.status_code == 404:
             return False
         if resposta.status_code != 200:
-            raise ErroDePlataforma(
-                f"O GitHub respondeu com erro (HTTP {resposta.status_code}). "
-                "Tente de novo em instantes."
-            )
+            raise erro_de_status(resposta)
         try:
             return str(resposta.json().get("app_id")) == self._app_id
         except ValueError, AttributeError:
@@ -189,13 +193,8 @@ class GitHubAdaptador:
         try:
             if not self._installation_id:
                 resposta = _requisitar("GET", f"{API}/app", self._jwt())
-                if resposta.status_code in (401, 403):
-                    raise ErroDePlataforma(MSG_RECUSADO)
                 if resposta.status_code != 200:
-                    raise ErroDePlataforma(
-                        f"O GitHub respondeu com erro (HTTP {resposta.status_code}). "
-                        "Tente de novo em instantes."
-                    )
+                    raise erro_de_status(resposta)
                 return ResultadoTeste(
                     ok=False,
                     status="falha",
@@ -211,41 +210,51 @@ class GitHubAdaptador:
 
     def listar_repositorios(self) -> list[Repositorio]:
         token = self.token_de_instalacao()
-        url: str | None = f"{API}/installation/repositories?per_page={POR_PAGINA}"
         repositorios: list[Repositorio] = []
-        for _ in range(MAX_PAGINAS):
-            if url is None:
-                break
-            resposta = self._ler(_requisitar("GET", url, token))
+        for resposta in self._paginas(f"{API}/installation/repositories", token):
             try:
-                itens = resposta.json()["repositories"]
                 repositorios += [
-                    Repositorio(str(r["id"]), r["full_name"], r["html_url"]) for r in itens
+                    Repositorio(str(r["id"]), r["full_name"], r["html_url"])
+                    for r in resposta.json()["repositories"]
                 ]
             except ValueError, KeyError, TypeError:
                 raise ErroDePlataforma(
                     "O GitHub devolveu uma lista de repositórios inesperada. Tente de novo."
                 ) from None
-            url = self._proxima_pagina(resposta)
         return repositorios
+
+    def _paginas(self, url_inicial: str, token: str):
+        """Percorre todas as páginas (Link rel=next). Nunca trunca em silêncio."""
+        url: str | None = f"{url_inicial}?per_page={POR_PAGINA}"
+        for _ in range(MAX_PAGINAS):
+            resposta = self._ler(_requisitar("GET", url, token))
+            yield resposta
+            url = self._proxima_pagina(resposta)
+            if url is None:
+                return
+        raise ErroDePlataforma(
+            "A lista do GitHub é grande demais para a central carregar inteira "
+            f"(mais de {MAX_PAGINAS * POR_PAGINA} itens)."
+        )
 
     @staticmethod
     def _proxima_pagina(resposta) -> str | None:
         destino = resposta.links.get("next", {}).get("url")
-        # Só segue o link se for da API do GitHub: o token nunca vai para outro host.
-        if destino and urlparse(destino).netloc == urlparse(API).netloc:
-            return destino
-        return None
+        if not destino:
+            return None
+        alvo, api = urlparse(destino), urlparse(API)
+        # O token só vai para https://api.github.com: qualquer outro destino é recusado.
+        if alvo.scheme != "https" or alvo.netloc != api.netloc:
+            raise ErroDePlataforma(
+                "O GitHub indicou uma página de resultados em um endereço inesperado. "
+                "Por segurança, a central parou. Tente de novo mais tarde."
+            )
+        return destino
 
     @staticmethod
     def _ler(resposta):
-        if resposta.status_code in (401, 403):
-            raise ErroDePlataforma(MSG_RECUSADO)
         if resposta.status_code != 200:
-            raise ErroDePlataforma(
-                f"O GitHub respondeu com erro (HTTP {resposta.status_code}). "
-                "Tente de novo em instantes."
-            )
+            raise erro_de_status(resposta)
         return resposta
 
     def conferir(
@@ -308,18 +317,13 @@ class GitHubAdaptador:
     ) -> list[Etiqueta]:
         token = token or self.token_de_instalacao()
         existentes: set[str] = set()
-        url: str | None = f"{API}/repos/{repo.caminho}/labels?per_page={POR_PAGINA}"
-        for _ in range(MAX_PAGINAS):
-            if url is None:
-                break
-            resposta = self._ler(_requisitar("GET", url, token))
+        for resposta in self._paginas(f"{API}/repos/{repo.caminho}/labels", token):
             try:
                 existentes |= {e["name"].lower() for e in resposta.json()}
             except ValueError, KeyError, TypeError, AttributeError:
                 raise ErroDePlataforma(
                     "O GitHub devolveu uma lista de etiquetas inesperada. Tente de novo."
                 ) from None
-            url = self._proxima_pagina(resposta)
         return [e for e in etiquetas if e.nome.lower() not in existentes]
 
     @staticmethod

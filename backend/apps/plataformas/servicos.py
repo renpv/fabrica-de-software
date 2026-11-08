@@ -13,9 +13,11 @@ from urllib.parse import urlencode
 
 from django.conf import settings
 from django.core import signing
+from django.core.cache import cache
 
 from .adaptadores import github, obter_adaptador
 from .adaptadores.base import ErroDePlataforma, Repositorio, ResultadoTeste
+from .erros import MENSAGENS_DE_ERRO
 from .models import ConexaoPlataforma
 
 SAL_MANIFESTO = "plataformas.github.manifesto"
@@ -26,27 +28,42 @@ ID_INSTALACAO_VALIDO = re.compile(r"^[0-9]{1,20}$")
 
 
 class ErroDeFluxo(Exception):
-    """Pedido recusado no fluxo de conexão. Mensagem em pt-BR; `status` é o HTTP a devolver."""
+    """Pedido recusado no fluxo de conexão. `codigo` é uma chave de `MENSAGENS_DE_ERRO`."""
 
-    def __init__(self, mensagem: str, status: int = 400):
-        super().__init__(mensagem)
-        self.status = status
+    def __init__(self, codigo: str):
+        super().__init__(MENSAGENS_DE_ERRO[codigo])
+        self.codigo = codigo
 
 
-MENSAGEM_STATE = (
-    "O link de conexão com o GitHub é inválido ou expirou. "
-    "Volte para a tela de plataformas e comece de novo."
-)
+def url_front() -> str:
+    return settings.FABRICA_URL_PUBLICA.rstrip("/") + "/plataformas"
+
+
+def url_de_erro(codigo: str) -> str:
+    """Destino do redirecionamento de falha: a tela de plataformas e um código fixo."""
+    if codigo not in MENSAGENS_DE_ERRO:
+        codigo = "github_fora_do_ar"
+    return f"{url_front()}?{urlencode({'erro': codigo})}"
 
 
 def _ler_state(state: str, sal: str, dono) -> dict:
     try:
         carga = signing.loads(state, salt=sal, max_age=VALIDADE_STATE_SEGUNDOS)
     except signing.BadSignature:
-        raise ErroDeFluxo(MENSAGEM_STATE) from None
-    if not isinstance(carga, dict) or carga.get("d") != str(dono.id):
-        raise ErroDeFluxo(MENSAGEM_STATE)
+        raise ErroDeFluxo("estado_invalido") from None
+    if not isinstance(carga, dict) or carga.get("d") != str(dono.id) or not carga.get("n"):
+        raise ErroDeFluxo("estado_invalido")
     return carga
+
+
+def _chave_nonce(carga: dict) -> str:
+    return f"plataformas:state:{carga['n']}"
+
+
+def _consumir_nonce(carga: dict) -> None:
+    """Marca o state como usado: ele vale uma vez só. Reuso vira `estado_invalido`."""
+    if not cache.add(_chave_nonce(carga), 1, VALIDADE_STATE_SEGUNDOS):
+        raise ErroDeFluxo("estado_invalido")
 
 
 def gerar_manifesto(dono, nome: str) -> dict:
@@ -64,15 +81,20 @@ def concluir_manifesto(dono, codigo: str, state: str) -> str:
     """Troca o código pelas credenciais, grava a conexão e devolve a URL de instalação."""
     carga = _ler_state(state, SAL_MANIFESTO, dono)
     if not CODIGO_VALIDO.fullmatch(codigo or ""):
-        raise ErroDeFluxo("O código devolvido pelo GitHub é inválido. Comece de novo.")
+        raise ErroDeFluxo("conversao_falhou")
+    _consumir_nonce(carga)  # o code do GitHub também é de uso único: sem nova tentativa
     try:
         credenciais = github.converter_manifesto(codigo)
     except ErroDePlataforma as erro:
-        raise ErroDeFluxo(str(erro), 502) from None
+        raise ErroDeFluxo(erro.codigo) from None
     nome = str(carga.get("nm") or "GitHub")[:120]
-    conexao = ConexaoPlataforma.objects.create(
-        dono=dono, nome=nome, tipo="github", credenciais=credenciais, config={}
-    )
+    try:
+        conexao = ConexaoPlataforma.objects.create(
+            dono=dono, nome=nome, tipo="github", credenciais=credenciais, config={}
+        )
+    except Exception:
+        # O App já existe no GitHub e a chave privada só veio uma vez: a pessoa precisa apagá-lo.
+        raise ErroDeFluxo("conversao_sem_registro") from None
     proximo = signing.dumps(
         {"d": str(dono.id), "n": secrets.token_urlsafe(16), "c": str(conexao.id)},
         salt=SAL_INSTALACAO,
@@ -85,26 +107,25 @@ def concluir_instalacao(dono, installation_id: str, state: str) -> str:
     """Confere que a instalação é do App desta conexão, grava o id e devolve o destino no front."""
     carga = _ler_state(state, SAL_INSTALACAO, dono)
     if not ID_INSTALACAO_VALIDO.fullmatch(installation_id or ""):
-        raise ErroDeFluxo("O número da instalação devolvido pelo GitHub é inválido.")
+        raise ErroDeFluxo("instalacao_invalida")
     conexao = (
         ConexaoPlataforma.objects.filter(dono=dono, pk=carga.get("c"), tipo="github").first()
         if _uuid_valido(carga.get("c"))
         else None
     )
     if conexao is None:
-        raise ErroDeFluxo(MENSAGEM_STATE)
+        raise ErroDeFluxo("estado_invalido")
+    _consumir_nonce(carga)
     try:
         pertence = obter_adaptador(conexao).instalacao_pertence_ao_app(installation_id)
     except ErroDePlataforma as erro:
-        raise ErroDeFluxo(str(erro), 502) from None
+        cache.delete(_chave_nonce(carga))  # falha do lado do GitHub: pode tentar de novo
+        raise ErroDeFluxo(erro.codigo) from None
     if not pertence:
-        raise ErroDeFluxo(
-            "Essa instalação não pertence ao App desta conexão. "
-            "Instale o App criado pela central e tente de novo."
-        )
+        raise ErroDeFluxo("instalacao_invalida")
     conexao.config = {**conexao.config, "installation_id": installation_id}
     conexao.save(update_fields=["config", "atualizado_em"])
-    return settings.FABRICA_URL_PUBLICA.rstrip("/") + "/plataformas"
+    return url_front()
 
 
 def _uuid_valido(valor) -> bool:
@@ -137,10 +158,12 @@ def excluir_conexao(conexao: ConexaoPlataforma) -> None:
 __all__ = [
     "ErroDeFluxo",
     "ErroDePlataforma",
+    "MENSAGENS_DE_ERRO",
     "concluir_instalacao",
     "concluir_manifesto",
     "excluir_conexao",
     "gerar_manifesto",
     "listar_repositorios",
     "testar_conexao",
+    "url_de_erro",
 ]

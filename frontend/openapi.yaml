@@ -293,18 +293,6 @@ paths:
       responses:
         '302':
           description: No response body
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Erro'
-          description: ''
-        '502':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Erro'
-          description: ''
   /api/conexoes-plataforma/github/manifesto/:
     post:
       operationId: conexoes_plataforma_github_manifesto
@@ -362,18 +350,6 @@ paths:
       responses:
         '302':
           description: No response body
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Erro'
-          description: ''
-        '502':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Erro'
-          description: ''
   /api/contas-agente/:
     get:
       operationId: contas_agente_list
@@ -823,7 +799,7 @@ components:
       properties:
         nome:
           type: string
-          maxLength: 100
+          maxLength: 26
       required:
       - nome
     ManifestoResposta:
