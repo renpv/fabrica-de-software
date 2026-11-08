@@ -5,6 +5,10 @@ segredo, token nem corpo de resposta do GitLab entra em log ou em mensagem de er
 chamadas não seguem redirecionamentos (o token não sai da instância).
 """
 
+import ipaddress
+import socket
+from urllib.parse import urlsplit
+
 import httpx
 
 from ..etiquetas import Etiqueta
@@ -23,6 +27,11 @@ MSG_RECUSADO = "O GitLab recusou o token. Confira se ele não expirou."
 MSG_TOKEN_INVALIDO = (
     "O token tem caracteres inválidos (acentos, espaços ou quebras de linha). Cole só o token."
 )
+MSG_INTERNO = (
+    "Esse endereço aponta para a própria central ou para uma rede reservada. "
+    "Use o endereço do GitLab da sua instituição."
+)
+COD_INTERNO = "gitlab_endereco_interno"
 MSG_INESPERADA = "O GitLab devolveu uma resposta inesperada. Tente de novo."
 
 
@@ -34,6 +43,38 @@ def token_valido(token) -> bool:
         and token.isprintable()
         and " " not in token
     )
+
+
+def _ip_proibido(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+        ip = ip.ipv4_mapped
+    # Redes privadas (RFC 1918, ULA) ficam permitidas: o GitLab pode estar na rede interna.
+    return (
+        ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved or ip.is_unspecified
+    )
+
+
+def verificar_destino(url: str) -> None:
+    """Recusa destinos que resolvem para loopback, link-local (inclui metadados de nuvem),
+    multicast, reservado ou não especificado. Toda resposta do DNS precisa passar.
+
+    Falha de resolução levanta a mensagem de rede (a mesma de qualquer falha de conexão)."""
+    partes = urlsplit(url)
+    msg_rede = ErroDePlataforma(
+        f"Não consegui acessar {url}. "
+        "Confira o endereço e se a central alcança a rede da instância.",
+        COD_FORA_DO_AR,
+    )
+    try:
+        porta = partes.port or (443 if partes.scheme == "https" else 80)
+        infos = socket.getaddrinfo(partes.hostname, porta, type=socket.SOCK_STREAM)
+        enderecos = {ipaddress.ip_address(i[4][0].split("%")[0]) for i in infos}
+    except OSError, ValueError, UnicodeError:
+        raise msg_rede from None
+    if not enderecos:
+        raise msg_rede
+    if any(_ip_proibido(ip) for ip in enderecos):
+        raise ErroDePlataforma(MSG_INTERNO, COD_INTERNO)
 
 
 def erro_de_status(resposta) -> ErroDePlataforma:
@@ -72,6 +113,7 @@ class GitLabAdaptador:
     def _requisitar(self, metodo: str, caminho: str, **opcoes):
         if not token_valido(self._token):
             raise ErroDePlataforma(MSG_TOKEN_INVALIDO, COD_TOKEN)
+        verificar_destino(self._url)  # a cada chamada: o DNS pode mudar depois de salvar
         try:
             return httpx.request(
                 metodo,
@@ -156,11 +198,11 @@ class GitLabAdaptador:
         self, repo: Repositorio, url_webhook: str, etiquetas: list[Etiqueta]
     ) -> list[ItemConferencia]:
         faltando = self._etiquetas_faltando(repo, etiquetas)
-        sobraram = self._criar_etiquetas(repo, faltando)
+        self._criar_etiquetas(repo, faltando)
         existe = self._tem_webhook(repo, url_webhook)
         if not existe:
             existe = self._criar_webhook(repo, url_webhook)
-        return [self._item_etiquetas(sobraram), self._item_webhook(existe)]
+        return [self._item_etiquetas([]), self._item_webhook(existe)]
 
     # --- etiquetas ----------------------------------------------------------------------
 
@@ -173,9 +215,8 @@ class GitLabAdaptador:
                 raise _inesperada() from None
         return [e for e in etiquetas if e.nome.lower() not in existentes]
 
-    def _criar_etiquetas(self, repo: Repositorio, faltando: list[Etiqueta]) -> list[Etiqueta]:
-        """Cria as etiquetas. 409 (já existe) conta como ok. Devolve as que não deram."""
-        sobraram = []
+    def _criar_etiquetas(self, repo: Repositorio, faltando: list[Etiqueta]) -> None:
+        """Cria as etiquetas. 409 (já existe) conta como ok. Qualquer outra falha sobe como erro."""
         for etiqueta in faltando:
             resposta = self._requisitar(
                 "POST",
@@ -187,8 +228,7 @@ class GitLabAdaptador:
                 },
             )
             if resposta.status_code not in (201, 409):
-                sobraram.append(etiqueta)
-        return sobraram
+                raise erro_de_status(resposta)
 
     @staticmethod
     def _item_etiquetas(faltando: list[Etiqueta]) -> ItemConferencia:
@@ -213,6 +253,7 @@ class GitLabAdaptador:
         return False
 
     def _criar_webhook(self, repo: Repositorio, url_webhook: str) -> bool:
+        """Cria o webhook. 422 é o GitLab recusando a URL; outras falhas sobem como erro."""
         resposta = self._requisitar(
             "POST",
             f"/projects/{repo.id_externo}/hooks",
@@ -226,7 +267,15 @@ class GitLabAdaptador:
                 "enable_ssl_verification": True,
             },
         )
-        return resposta.status_code == 201
+        if resposta.status_code == 422:
+            raise ErroDePlataforma(
+                "O GitLab recusou o endereço do webhook. Peça ao administrador da instância "
+                f"para liberar requisições para {urlsplit(url_webhook).netloc}.",
+                COD_FORA_DO_AR,
+            )
+        if resposta.status_code != 201:
+            raise erro_de_status(resposta)
+        return True
 
     @staticmethod
     def _item_webhook(existe: bool) -> ItemConferencia:

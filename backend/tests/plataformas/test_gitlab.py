@@ -8,7 +8,7 @@ import respx
 from apps.donos.models import Dono
 from apps.plataformas import servicos
 from apps.plataformas.adaptadores import obter_adaptador
-from apps.plataformas.adaptadores.base import Repositorio
+from apps.plataformas.adaptadores.base import ErroDePlataforma, Repositorio
 from apps.plataformas.etiquetas import ETIQUETAS_FIXAS
 from apps.plataformas.models import ConexaoPlataforma
 
@@ -21,6 +21,20 @@ MSG_REDE = (
 )
 MSG_SEM_API = "O token precisa do escopo api. Crie outro marcando api."
 MSG_RECUSADO = "O GitLab recusou o token. Confira se ele não expirou."
+
+
+def _dns(*ips):
+    def falso(host, porta, *a, **k):
+        familia = 10 if ":" in ips[0] else 2
+        return [(familia, 1, 6, "", (ip, porta)) for ip in ips]
+
+    return falso
+
+
+@pytest.fixture(autouse=True)
+def dns_publico(monkeypatch):
+    """Sem DNS real: por padrão, todo host resolve para um IP público."""
+    monkeypatch.setattr("socket.getaddrinfo", _dns("203.0.113.10"))
 
 
 @pytest.fixture
@@ -243,3 +257,98 @@ def test_criar_conexao_exige_login(client, db):
 def test_criar_conexao_url_invalida_da_400(client, logado):
     r = _post(client, {"nome": "GL", "url_base": "ftp://x", "token": TOKEN})
     assert r.status_code == 400 and "endereço" in r.json()["detail"]
+
+
+@respx.mock
+@pytest.mark.parametrize(
+    "endereco",
+    [
+        "localhost", "127.0.0.1", "[::1]", "169.254.169.254", "0.0.0.0", "[::ffff:127.0.0.1]",
+        "[fe80::1]", "224.0.0.1",
+    ],
+)  # fmt: skip
+def test_criar_recusa_endereco_interno(client, logado, monkeypatch, endereco):
+    ip = endereco.strip("[]").replace("localhost", "127.0.0.1")
+    monkeypatch.setattr("socket.getaddrinfo", _dns(ip))
+    r = _post(client, {"nome": "GL", "url_base": endereco, "token": TOKEN})
+    assert r.status_code == 400
+    assert r.json()["detail"].startswith("Esse endereço aponta para a própria central")
+    assert len(respx.calls) == 0
+    assert not ConexaoPlataforma.objects.exists()
+
+
+@respx.mock
+def test_criar_recusa_host_que_resolve_para_loopback(client, logado, monkeypatch):
+    monkeypatch.setattr("socket.getaddrinfo", _dns("203.0.113.10", "127.0.0.1"))
+    r = _post(client, {"nome": "GL", "url_base": "gitlab.exemplo.com", "token": TOKEN})
+    assert r.status_code == 400 and "rede reservada" in r.json()["detail"]
+    assert len(respx.calls) == 0
+
+
+@respx.mock
+def test_criar_aceita_rede_privada(client, logado, monkeypatch):
+    monkeypatch.setattr("socket.getaddrinfo", _dns("10.1.2.3"))
+    respx.get("https://git.interno/api/v4/personal_access_tokens/self").respond(
+        200, json={"scopes": ["api"]}
+    )
+    r = _post(client, {"nome": "GL", "url_base": "git.interno", "token": TOKEN})
+    assert r.status_code == 201, r.content
+
+
+def test_falha_de_dns_mantem_mensagem_de_rede(client, logado, monkeypatch):
+    def falha(*a, **k):
+        raise OSError("sem dns")
+
+    monkeypatch.setattr("socket.getaddrinfo", falha)
+    r = _post(client, {"nome": "GL", "url_base": URL, "token": TOKEN})
+    assert r.status_code == 400 and r.json() == {"detail": MSG_REDE}
+
+
+@respx.mock
+def test_adaptador_recusa_na_hora_se_dns_mudou(conexao_gitlab, monkeypatch):
+    monkeypatch.setattr("socket.getaddrinfo", _dns("127.0.0.1"))
+    adaptador = obter_adaptador(conexao_gitlab)
+    assert "rede reservada" in adaptador.testar().mensagem
+    with pytest.raises(ErroDePlataforma, match="rede reservada"):
+        adaptador.listar_repositorios()
+    assert len(respx.calls) == 0
+
+
+def test_normalizar_url_longa_demais():
+    with pytest.raises(ValueError, match="longo demais"):
+        servicos.normalizar_url_gitlab("a" * 190 + ".com.br/gitlab")
+
+
+def test_criar_url_longa_da_400(client, logado):
+    r = _post(client, {"nome": "GL", "url_base": "a" * 195 + ".com", "token": TOKEN})
+    assert r.status_code == 400 and "longo demais" in r.json()["detail"]
+
+
+@respx.mock
+def test_etiqueta_com_403_explica(conexao_gitlab):
+    respx.get(f"{API}/projects/42/labels").respond(200, json=[])
+    respx.post(f"{API}/projects/42/labels").respond(403, json={"message": "corpo-secreto"})
+    with pytest.raises(ErroDePlataforma, match="Maintainer") as e:
+        obter_adaptador(conexao_gitlab).preparar(REPO, URL_HOOK, ETIQUETAS_FIXAS)
+    assert "corpo-secreto" not in str(e.value)
+
+
+@respx.mock
+def test_webhook_422_diz_que_a_instancia_recusou_a_url(conexao_gitlab):
+    respx.get(f"{API}/projects/42/hooks").respond(200, json=[])
+    respx.post(f"{API}/projects/42/hooks").respond(422, json={"message": "corpo-secreto"})
+    nomes = [{"name": e.nome} for e in ETIQUETAS_FIXAS]
+    respx.get(f"{API}/projects/42/labels").respond(200, json=nomes)
+    with pytest.raises(ErroDePlataforma, match="recusou o endereço do webhook") as e:
+        obter_adaptador(conexao_gitlab).preparar(REPO, URL_HOOK, ETIQUETAS_FIXAS)
+    assert "fabrica.exemplo.com" in str(e.value) and "corpo-secreto" not in str(e.value)
+
+
+@respx.mock
+def test_webhook_403_explica(conexao_gitlab):
+    nomes = [{"name": e.nome} for e in ETIQUETAS_FIXAS]
+    respx.get(f"{API}/projects/42/labels").respond(200, json=nomes)
+    respx.get(f"{API}/projects/42/hooks").respond(200, json=[])
+    respx.post(f"{API}/projects/42/hooks").respond(403, json={})
+    with pytest.raises(ErroDePlataforma, match="Maintainer"):
+        obter_adaptador(conexao_gitlab).preparar(REPO, URL_HOOK, ETIQUETAS_FIXAS)

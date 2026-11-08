@@ -40,6 +40,7 @@ class ConexaoRecusada(Exception):
     """Dados de conexão recusados (formato ou teste). A mensagem é pt-BR, sem segredo."""
 
 
+TAMANHO_MAXIMO_URL = ConexaoPlataforma._meta.get_field("url_base").max_length
 MSG_URL_INVALIDA = (
     "O endereço do GitLab é inválido. Use algo como https://gitlab.suaempresa.com.br, "
     "sem usuário, senha nem parâmetros."
@@ -71,7 +72,13 @@ def normalizar_url_gitlab(texto: str) -> str:
     ):
         raise ValueError(MSG_URL_INVALIDA)
     caminho = partes.path.rstrip("/").removesuffix("/api/v4").rstrip("/")
-    return f"{partes.scheme}://{partes.netloc}{caminho}"
+    url = f"{partes.scheme}://{partes.netloc}{caminho}"
+    if len(url) > TAMANHO_MAXIMO_URL:
+        raise ValueError(
+            f"O endereço do GitLab é longo demais (máximo {TAMANHO_MAXIMO_URL} caracteres). "
+            "Use o endereço principal da instância."
+        )
+    return url
 
 
 def url_webhook_gitlab(conexao: ConexaoPlataforma) -> str:
