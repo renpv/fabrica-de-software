@@ -282,6 +282,25 @@ def _id_da_instalacao(payload) -> str | None:
     return texto if ID_INSTALACAO_VALIDO.fullmatch(texto) else None
 
 
+def _rejeitar_constante(nome: str):
+    raise ValueError(nome)  # NaN e Infinity não são JSON válido
+
+
+def _ler_json(corpo: bytes):
+    return json.loads(corpo, parse_constant=_rejeitar_constante)
+
+
+def _sem_nulo(valor):
+    """Troca U+0000 por U+FFFD em chaves e valores (o PostgreSQL não guarda NUL em jsonb)."""
+    if isinstance(valor, str):
+        return valor.replace("\x00", "\ufffd")
+    if isinstance(valor, list):
+        return [_sem_nulo(v) for v in valor]
+    if isinstance(valor, dict):
+        return {_sem_nulo(k): _sem_nulo(v) for k, v in valor.items()}
+    return valor
+
+
 def _guardar_evento(
     conexao: ConexaoPlataforma, tipo_evento: str, entrega_id: str, payload
 ) -> RespostaWebhook:
@@ -300,11 +319,11 @@ def _guardar_evento(
                 conexao=conexao,
                 tipo_evento=tipo_evento,
                 entrega_id=entrega_id,
-                payload=payload,
+                payload=_sem_nulo(payload),
             )
     except IntegrityError:  # reentrega concorrente
         return reentrega
-    except DataError:  # por exemplo, \u0000 no texto, que o PostgreSQL não guarda em jsonb
+    except DataError:  # último recurso: o PostgreSQL recusou o conteúdo
         return _CORPO_INVALIDO
     return RespostaWebhook(202, "Evento recebido.")
 
@@ -316,7 +335,7 @@ def receber_webhook_github(
     if not assinatura:
         return _ASSINATURA_AUSENTE
     try:
-        payload = json.loads(corpo)
+        payload = _ler_json(corpo)
     except ValueError, RecursionError:
         return _CORPO_INVALIDO
     instalacao = _id_da_instalacao(payload)
@@ -354,7 +373,7 @@ def receber_webhook_gitlab(
     if not token or not segredo or not _iguais(segredo, token):
         return _TOKEN_INVALIDO
     try:
-        payload = json.loads(corpo)
+        payload = _ler_json(corpo)
     except ValueError, RecursionError:
         return _CORPO_INVALIDO
     if not isinstance(payload, dict):

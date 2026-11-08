@@ -236,7 +236,26 @@ def test_gitlab_corpo_grande_413(client, conexao_gitlab):
     assert EventoRecebido.objects.count() == 0
 
 
-def test_github_nul_no_payload_400_sem_gravar(client, conexao_github):
-    corpo = '{"installation": {"id": 777}, "t": "a\\u0000b"}'
-    assert _github(client, corpo=corpo).status_code == 400
+def test_github_nul_vira_fffd_e_grava(client, conexao_github):
+    corpo = '{"installation": {"id": 777}, "t\\u0000k": "a\\u0000b", "l": ["\\u0000"]}'
+    assert _github(client, corpo=corpo).status_code == 202
+    ev = EventoRecebido.objects.get()
+    assert ev.payload["t\ufffdk"] == "a\ufffdb"
+    assert ev.payload["l"] == ["\ufffd"]
+    assert "\x00" not in json.dumps(ev.payload)
+
+
+def test_gitlab_nul_vira_fffd_e_grava(client, conexao_gitlab):
+    corpo = '{"k\\u0000": "a\\u0000b"}'
+    assert _gitlab(client, conexao_gitlab.id, corpo=corpo).status_code == 202
+    assert EventoRecebido.objects.get().payload == {"k\ufffd": "a\ufffdb"}
+
+
+@pytest.mark.parametrize("constante", ["NaN", "Infinity", "-Infinity"])
+def test_constantes_nao_json_400(client, conexao_github, conexao_gitlab, constante):
+    r = _github(client, corpo=f'{{"installation": {{"id": 777}}, "n": {constante}}}')
+    assert r.status_code == 400
+    assert "JSON" in r.json()["detail"]
+    r = _gitlab(client, conexao_gitlab.id, corpo=f'{{"n": {constante}}}')
+    assert r.status_code == 400
     assert EventoRecebido.objects.count() == 0
