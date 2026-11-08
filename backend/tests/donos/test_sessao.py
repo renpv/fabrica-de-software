@@ -68,12 +68,12 @@ def test_login_exige_csrf_quando_o_cliente_o_aplica(membro_factory):
 
 
 def test_criar_dono_cria_usuario_dono_e_membro(db, monkeypatch):
-    monkeypatch.setattr(getpass, "getpass", lambda prompt="": "s3nha-forte")
+    monkeypatch.setattr(getpass, "getpass", lambda prompt="": "cavalo-grampo-91")
     call_command("criar_dono", nome="Casa", usuario="renato", email="r@example.com")
     membro = Membro.objects.get(usuario__username="renato")
     assert membro.dono.nome == "Casa"
     assert membro.usuario.email == "r@example.com"
-    assert membro.usuario.check_password("s3nha-forte")
+    assert membro.usuario.check_password("cavalo-grampo-91")
 
 
 def test_criar_dono_recusa_senhas_diferentes(db, monkeypatch):
@@ -89,3 +89,38 @@ def test_criar_dono_recusa_usuario_existente(db, monkeypatch, membro_factory):
     monkeypatch.setattr(getpass, "getpass", lambda prompt="": "s3nha-forte")
     with pytest.raises(CommandError, match="já existe"):
         call_command("criar_dono", nome="Casa", usuario="renato", email="r@example.com")
+
+
+def test_sessao_de_usuario_sem_dono_da_403_e_nao_500(client, django_user_model):
+    django_user_model.objects.create_superuser(username="admin", password="s3nha-forte")
+    client.login(username="admin", password="s3nha-forte")
+    r = client.get("/api/sessao/")
+    assert r.status_code == 403
+    assert "criar_dono" in r.json()["detail"]
+
+
+def test_logout_sem_csrf_da_403_em_portugues(membro_factory):
+    from django.test import Client
+
+    membro_factory(usuario__username="renato", senha="s3nha-forte")
+    c = Client(enforce_csrf_checks=True)
+    c.login(username="renato", password="s3nha-forte")
+    r = c.delete("/api/sessao/")
+    assert r.status_code == 403
+    assert r.json()["detail"].startswith("Sessão expirada")
+
+
+def test_11a_tentativa_de_login_recebe_429(client, membro_factory):
+    membro_factory(usuario__username="renato", senha="s3nha-forte")
+    for _ in range(10):
+        assert _login(client, "renato", "errada").status_code == 400
+    r = _login(client, "renato", "s3nha-forte")
+    assert r.status_code == 429
+    assert "Muitas tentativas" in r.json()["detail"]
+
+
+def test_criar_dono_recusa_senha_fraca(db, monkeypatch):
+    monkeypatch.setattr(getpass, "getpass", lambda prompt="": "123")
+    with pytest.raises(CommandError, match="muito curta"):
+        call_command("criar_dono", nome="Casa", usuario="renato", email="r@example.com")
+    assert not Membro.objects.exists()

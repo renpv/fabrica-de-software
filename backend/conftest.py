@@ -2,6 +2,7 @@
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 
 from apps.donos.models import Dono, Membro
 
@@ -21,3 +22,9 @@ def membro_factory(db):
         return Membro.objects.create(usuario=usuario, dono=dono)
 
     return criar
+
+
+@pytest.fixture(autouse=True)
+def _limpa_cache():
+    """O limite de tentativas de login usa o cache; cada teste começa do zero."""
+    cache.clear()

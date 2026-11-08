@@ -1,6 +1,8 @@
 """Regras de negócio de donos e de login. Views e comandos só chamam este módulo."""
 
 from django.contrib.auth import authenticate, get_user_model, login, logout
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from .models import Dono, Membro
@@ -27,10 +29,14 @@ def autenticar(request, usuario: str, senha: str) -> Membro | None:
 
 
 def criar_dono(nome: str, usuario: str, email: str, senha: str) -> Membro:
-    """Cria o usuário, o dono e o vínculo. Levanta ValueError se o usuário já existe."""
+    """Cria usuário, dono e vínculo. ValueError se o usuário já existe ou a senha é fraca."""
     modelo = get_user_model()
     if modelo.objects.filter(username=usuario).exists():
         raise ValueError(f'O usuário "{usuario}" já existe. Escolha outro nome de usuário.')
+    try:
+        validate_password(senha, modelo(username=usuario, email=email))
+    except ValidationError as erro:
+        raise ValueError(" ".join(erro.messages)) from erro
     with transaction.atomic():
         user = modelo.objects.create_user(username=usuario, email=email, password=senha)
         dono = Dono.objects.create(nome=nome)
