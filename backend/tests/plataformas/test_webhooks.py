@@ -259,3 +259,15 @@ def test_constantes_nao_json_400(client, conexao_github, conexao_gitlab, constan
     r = _gitlab(client, conexao_gitlab.id, corpo=f'{{"n": {constante}}}')
     assert r.status_code == 400
     assert EventoRecebido.objects.count() == 0
+
+
+def test_github_payload_profundo_demais_400_sem_gravar(client, conexao_github):
+    corpo = '{"installation": {"id": 777}, "p": ' + "[" * 3000 + "]" * 3000 + "}"
+    assert _github(client, corpo=corpo).status_code == 400
+    assert EventoRecebido.objects.count() == 0
+
+
+def test_gitlab_payload_profundo_demais_400_sem_gravar(client, conexao_gitlab):
+    corpo = '{"p": ' + "[" * 3000 + "]" * 3000 + "}"
+    assert _gitlab(client, conexao_gitlab.id, corpo=corpo).status_code == 400
+    assert EventoRecebido.objects.count() == 0

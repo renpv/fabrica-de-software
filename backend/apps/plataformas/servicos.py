@@ -313,17 +313,18 @@ def _guardar_evento(
     if EventoRecebido.objects.filter(conexao=conexao, entrega_id=entrega_id).exists():
         return reentrega
     try:
+        limpo = _sem_nulo(payload)
         with transaction.atomic():
             EventoRecebido.objects.create(
                 dono=conexao.dono,
                 conexao=conexao,
                 tipo_evento=tipo_evento,
                 entrega_id=entrega_id,
-                payload=_sem_nulo(payload),
+                payload=limpo,
             )
     except IntegrityError:  # reentrega concorrente
         return reentrega
-    except DataError:  # último recurso: o PostgreSQL recusou o conteúdo
+    except RecursionError, DataError:  # JSON profundo demais ou recusado pelo PostgreSQL
         return _CORPO_INVALIDO
     return RespostaWebhook(202, "Evento recebido.")
 
