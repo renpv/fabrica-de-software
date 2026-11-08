@@ -24,6 +24,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "drf_spectacular",
+    "apps.donos",
     "apps.saude",
 ]
 
@@ -33,6 +34,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "apps.donos.middleware.DonoMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -59,6 +61,16 @@ WSGI_APPLICATION = "config.wsgi.application"
 DATABASES = {"default": env.db("DATABASE_URL")}
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": f"django.contrib.auth.password_validation.{nome}"}
+    for nome in (
+        "UserAttributeSimilarityValidator",
+        "MinimumLengthValidator",
+        "CommonPasswordValidator",
+        "NumericPasswordValidator",
+    )
+]
+
 LANGUAGE_CODE = "pt-br"
 TIME_ZONE = "America/Fortaleza"
 USE_I18N = True
@@ -73,6 +85,10 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
+    # 0 = nenhum proxy confiável (usa o IP direto); atrás do Caddy, 1. Sem isso o
+    # X-Forwarded-For, que o cliente forja, burlaria o limite de login.
+    "NUM_PROXIES": env.int("DJANGO_NUM_PROXIES", default=0),
+    "DEFAULT_THROTTLE_RATES": {"sessao": "10/min", "sessao_usuario": "10/min"},
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 

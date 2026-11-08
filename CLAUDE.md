@@ -16,7 +16,7 @@ Orquestra agentes de IA que implementam projetos. Back-end Django + DRF em `back
 - Fonte e motivos: `docs/pesquisa/2026-11-07-versoes-da-stack.md`.
 
 ## Configuração
-Só por variável de ambiente (12-factor). Lista em `.env.example`. Segredo nunca aparece em resposta da API, log nem mensagem de erro.
+Só por variável de ambiente (12-factor). Lista em `.env.example`. Atrás de proxy (Caddy), defina `DJANGO_NUM_PROXIES=1`; com 0 o limite de login usa o IP direto e ignora `X-Forwarded-For`. Segredo nunca aparece em resposta da API, log nem mensagem de erro.
 
 ## Módulos e contratos de importação
 Os módulos ficam em `backend/apps/`. Os contratos estão em `backend/.importlinter` e são checados por `lint-imports`:
