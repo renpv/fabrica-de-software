@@ -1,7 +1,8 @@
 name: Acordar o Cursor
 
-# Dispara a automação do Cursor quando o orquestrador libera uma task
-# (issue com `pronta-cursor`) ou pede correção (PR com `correcao`).
+# Acorda a automação do Cursor quando a etiqueta `agente:cursor` entra numa
+# issue ou num PR que já tem uma ação (`acao:implementar`, `acao:corrigir`...).
+# Quem orquestra põe a ação primeiro e a etiqueta do agente por último.
 on:
   issues:
     types: [labeled]
@@ -18,9 +19,14 @@ permissions: {}
 jobs:
   disparar:
     if: >-
-      (github.event_name == 'issues' && github.event.label.name == 'pronta-cursor' && github.event.issue.pull_request == null)
-      || (github.event_name == 'pull_request' && github.event.label.name == 'correcao'
-          && github.event.pull_request.head.repo.full_name == github.repository)
+      github.event.label.name == 'agente:cursor'
+      && (
+        (github.event_name == 'issues' && github.event.issue.pull_request == null
+          && contains(join(github.event.issue.labels.*.name, ' '), 'acao:'))
+        || (github.event_name == 'pull_request'
+          && github.event.pull_request.head.repo.full_name == github.repository
+          && contains(join(github.event.pull_request.labels.*.name, ' '), 'acao:'))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -31,12 +37,13 @@ jobs:
           NUMERO: ${{ github.event.issue.number || github.event.pull_request.number }}
           TITULO: ${{ github.event.issue.title || github.event.pull_request.title }}
           URL: ${{ github.event.issue.html_url || github.event.pull_request.html_url }}
-          ETIQUETA: ${{ github.event.label.name }}
+          ETIQUETAS: ${{ toJSON(github.event_name == 'issues' && github.event.issue.labels.*.name || github.event.pull_request.labels.*.name) }}
         run: |
+          acao="$(jq -r '[.[] | select(startswith("acao:")) | ltrimstr("acao:")] | first // ""' <<<"$ETIQUETAS")"
           jq -n \
             --argjson numero "$NUMERO" --arg titulo "$TITULO" \
-            --arg url "$URL" --arg etiqueta "$ETIQUETA" \
-            '{numero:$numero, titulo:$titulo, url:$url, etiqueta:$etiqueta}' \
+            --arg url "$URL" --arg acao "$acao" \
+            '{numero:$numero, titulo:$titulo, url:$url, acao:$acao}' \
           | curl --fail-with-body -sS -X POST "$CURSOR_WEBHOOK_URL" \
               -H "Authorization: Bearer $CURSOR_WEBHOOK_API_KEY" \
               -H "Content-Type: application/json" \

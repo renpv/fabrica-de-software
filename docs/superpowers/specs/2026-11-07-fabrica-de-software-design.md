@@ -34,7 +34,10 @@ A Fábrica é uma **central única** onde ele:
 | **Projeto** | Um software em construção, ligado a um repositório numa plataforma. |
 | **Etapa** | Um passo do fluxo: grilling/spec, plano, publicar tasks, implementar, revisar, merge, promover. |
 | **Papel** | Quem cumpre uma etapa: uma conta de agente ou o humano (aprovação). |
-| **Predefinição** | Pacote salvo com o fluxo inteiro: as etapas, a ordem, o gatilho de cada uma e a conta que faz cada etapa. |
+| **Ação** | O que uma etapa pede ao agente: planejar, implementar, revisar, corrigir. Vira a etiqueta `acao:<ação>` no repositório. |
+| **Modelo** | O modelo que a conta usa numa etapa (ex.: Opus para revisar, Sonnet para implementar, Haiku para rodar a suíte). Economiza tokens: cada etapa com o modelo que basta para ela. |
+| **Método** | Como o agente conduz o trabalho e onde guarda os artefatos: superpowers, Spec Kit, OpenSpec. Define o comando de cada etapa e onde a central lê a spec, o plano e as tasks. |
+| **Predefinição** | Pacote salvo com o fluxo inteiro: o método, as etapas, a ordem, o gatilho de cada uma e a conta e o modelo que fazem cada etapa. |
 | **Spec** | Uma funcionalidade em andamento num projeto. Tem as próprias tasks e pode ter um ajuste próprio da predefinição. |
 | **Task** | Unidade de trabalho entregue ao executor (hoje, uma issue). |
 | **Runner local** | Programa que roda no PC do Renato, conecta-se à central (só conexão de saída), pega o trabalho destinado às contas locais e devolve o andamento. |
@@ -57,6 +60,12 @@ A Fábrica é uma **central única** onde ele:
 - **Estado no repositório:** o andamento de cada task também fica visível na plataforma (issue, etiquetas, PR/MR), como hoje. A central guarda a configuração e o histórico, mas o fluxo continua legível e retomável pelo repositório. Isso prepara a ida para a nuvem (seção 5).
 - **Riscos a verificar antes do plano (GitLab da Unilab):** (1) se a instância é alcançável pela nuvem do Cursor ou só pela rede interna; se for só interna, o Cursor precisa rodar no modo `machine` (no PC) nesses projetos; (2) se a instância consegue enviar webhooks para a VPS, ou se a central precisa consultar o estado periodicamente; (3) se a política da Unilab permite um token de acesso guardado num servidor pessoal.
 - Ligar um projeto a um repositório: a central **prepara o repositório sozinha** (etiquetas, webhooks, segredos/variáveis de CI que o fluxo exigir).
+- **Etiquetas em três famílias (decidido pelo Renato):** a ação (o quê) e o agente (quem) são etiquetas separadas, para que a lista cresça somando, e não multiplicando (3 ações e 3 agentes são 6 etiquetas, e não 9).
+  - **Ação:** `acao:implementar`, `acao:revisar`, `acao:corrigir` (no futuro, `acao:planejar`, `acao:testar`…).
+  - **Agente:** `agente:claude`, `agente:cursor` (no futuro, `agente:agy`, `agente:codex`…). Uma por tipo de agente, nunca por conta: qual conta trabalha é escolha da predefinição.
+  - **Estado e tipo:** `em-andamento`, `precisa-humano`, `tarefa`, `melhoria`.
+  - **Protocolo:** o agente acorda quando recebe a etiqueta dele **numa issue ou num PR/MR** que tenha uma ação. Por isso quem orquestra põe a ação primeiro e o agente por último. Ao pegar o item, o agente põe `em-andamento`. Ao terminar, tira a etiqueta dele, a ação e o `em-andamento`, e quem orquestra põe a próxima ação e o próximo agente. Travado, ele põe `precisa-humano`.
+  - O prefixo com dois-pontos simples funciona igual no GitHub e no GitLab (as *scoped labels* com `::` do GitLab são pagas). *(Escolha do Claude, trocável.)*
 - Botão **"conferir"**: mostra o estado de cada item da preparação e oferece o conserto ao lado do que faltar.
 - Vários projetos em andamento ao mesmo tempo, cada um com a própria predefinição.
 
@@ -69,6 +78,8 @@ A Fábrica é uma **central única** onde ele:
 - **As mudanças valem na hora**, tanto na predefinição (para todos os projetos que a usam) quanto na spec. "Na hora" vale a partir da **próxima etapa**: a etapa em execução termina com a conta que a pegou. *(Escolha do Claude, trocável.)*
 - A central registra qual configuração cada etapa usou de fato (histórico), para entender depois o que aconteceu. *(Escolha do Claude.)*
 - **Gatilhos de etapa:** webhook recebido (evento da plataforma), webhook enviado ao agente, temporizador, conclusão da etapa anterior, decisão humana.
+- **Cada etapa escolhe a conta e o modelo** (o modelo é opcional; vazio usa o padrão da conta). O objetivo é pôr em cada etapa o agente e o modelo mais indicados, sem gastar token à toa.
+- **Método:** a predefinição escolhe o método (superpowers, Spec Kit, OpenSpec…). O método mapeia cada etapa para o comando do agente e diz onde ficam a spec, o plano e as tasks. No MVP só existe o **superpowers**; os outros entram como novas linhas do mapeamento. *(Método por predefinição, e não por etapa, porque os artefatos de um método não servem a outro. Escolha do Claude, trocável.)* Levantamento em `docs/pesquisa/2026-11-07-metodos-sdd.md`.
 - No MVP, as etapas e os papéis disponíveis são os do fluxo de hoje. O modelo de dados já trata a etapa como item configurável, para os papéis futuros (seção 5).
 
 ### 4.4 Acompanhamento
@@ -113,7 +124,7 @@ A Fábrica é uma **central única** onde ele:
   - Fonte: `docs/pesquisa/2026-11-07-orquestradores-de-agentes.md` (ponto marcado ali como "a confirmar com a Anthropic").
 - **Cursor:** a Cloud Agents API v1 está em beta e ainda não tem webhook de status. A central precisa consultar o estado (polling ou stream) até ele existir.
 - Um projeto de cliente só usa contas permitidas para aquele projeto. O trabalho de um cliente nunca cai na conta de outro. *(Escolha do Claude.)*
-- O contrato do executor de hoje (pegar a task, branch `tarefa-<N>`, PR/MR com `Closes #N`, correção no mesmo branch) continua sendo o contrato que todo executor cumpre. A central monta o adaptador de cada agente para esse contrato.
+- O contrato do executor de hoje (pegar a task pelas etiquetas de ação e de agente, branch `tarefa-<N>`, PR/MR com `Closes #N`, correção no mesmo branch) continua sendo o contrato que todo executor cumpre. A central monta o adaptador de cada agente para esse contrato.
 
 ## 8. Decidido pelo Renato
 
@@ -125,6 +136,8 @@ A Fábrica é uma **central única** onde ele:
 - Aviso só quando os agentes não têm autonomia, por um PWA simples que permite responder.
 - A central prepara o repositório sozinha, com um botão para conferir.
 - Papéis múltiplos por etapa ficam para o futuro.
+- Etiquetas separadas para a ação e para o agente; o agente acorda com a etiqueta dele numa issue ou num PR/MR.
+- Cada etapa pode usar um agente diferente, o mais indicado para ela, e o sistema mapeia os métodos (superpowers, Spec Kit, OpenSpec).
 - O grilling, a spec e o plano continuam na sessão do Claude Code. A central começa no plano aprovado.
 - No GitLab, o MVP atende à instância da Unilab.
 - O fluxo pode esperar o PC quando depende dele ("aguardando o runner"). O objetivo é ir para a nuvem, orquestrado pelos repositórios.
@@ -140,7 +153,7 @@ A Fábrica é uma **central única** onde ele:
 - **Execução do Claude local:** o runner cria uma worktree por task, roda o `claude`, que implementa e faz os commits, e depois faz o push. A central abre o PR/MR pela API. O token da plataforma é de curta duração, fornecido pela central a cada task, e não fica guardado no PC. O Cursor abre o próprio PR (`autoCreatePR`). Os dois adaptadores devolvem à central o mesmo resultado (branch, link do PR/MR e estado).
 - **Spec e plano** ficam como arquivos no repositório do projeto (`docs/superpowers/specs/` e `plans/`), como hoje. A central os lê e mostra no painel e no PWA para aprovar. "Publicar tasks" cria uma issue por task do plano aprovado.
 - **Merge:** o revisor aprova, e a central faz o merge pela API, só com o CI verde. Cada predefinição tem a opção "merge autônomo" ou "merge com ok humano". Esta segunda opção serve, por exemplo, aos projetos da Unilab, e cria uma pendência.
-- **Detecção de pendências:** "sem autonomia" é sinalizado pelo agente, que aplica a etiqueta `precisa-humano` ou comenta com um marcador (contrato que já existe). "Sem cota" e falhas são detectados pelo adaptador, pelo erro da API ou pela saída do processo.
+- **Detecção de pendências:** "sem autonomia" é sinalizado pelo agente, que aplica a etiqueta `precisa-humano` ou comenta com um marcador. "Sem cota" e falhas são detectados pelo adaptador, pelo erro da API ou pela saída do processo.
 - **Isolamento:** toda entidade pertence a um **Dono**. No MVP há um único usuário e um único dono, com testes que garantem que uma consulta não cruza donos.
 - **Plataformas:** no GitHub, um GitHub App instalado uma vez (dá para criar webhooks e etiquetas sem token amplo); no GitLab, um token de acesso (de grupo ou pessoal) guiado pelo painel. Os webhooks chegam à VPS pelo Caddy.
 - **Formato do fluxo:** lista linear de etapas com dois desvios fixos (reprovar volta para a correção; pendência pausa). Quando a predefinição muda no meio de uma spec, ela continua da etapa atual pelo nome; se essa etapa foi removida, segue para a próxima que existir.
