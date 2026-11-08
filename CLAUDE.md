@@ -5,7 +5,7 @@ Orquestra agentes de IA que implementam projetos. Back-end Django + DRF em `back
 ## Comandos
 - Banco: `docker compose -f docker-compose.dev.yml up -d db` (PostgreSQL 18, porta 5434).
 - Verificação completa: `automacao/verificar.sh` (ruff, contratos de importação, migrações, pytest). É o que o CI e o pre-push rodam.
-- Testes: `cd backend && uv run pytest`. Exigem `DATABASE_URL`, `DJANGO_SECRET_KEY` e `FABRICA_URL_PUBLICA` (modelo em `.env.example`).
+- Testes: `cd backend && uv run pytest`. Exigem `DATABASE_URL`, `DJANGO_SECRET_KEY`, `FABRICA_URL_PUBLICA` e `FABRICA_CHAVES_COFRE` (modelo em `.env.example`).
 
 ## Onde cada versão é fixada
 - Python 3.14: `backend/.python-version` e `requires-python` em `backend/pyproject.toml`.

@@ -15,6 +15,7 @@ source_modules =
     apps.donos
 forbidden_modules =
     apps.saude
+    apps.cofre
 allow_indirect_imports = True
 
 [importlinter:contract:saude-isolado]
@@ -24,4 +25,15 @@ source_modules =
     apps.saude
 forbidden_modules =
     apps.donos
+    apps.cofre
+allow_indirect_imports = True
+
+[importlinter:contract:cofre-isolado]
+name = O módulo cofre não importa nenhum outro módulo de apps
+type = forbidden
+source_modules =
+    apps.cofre
+forbidden_modules =
+    apps.donos
+    apps.saude
 allow_indirect_imports = True

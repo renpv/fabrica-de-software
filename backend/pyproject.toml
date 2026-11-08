@@ -9,6 +9,7 @@ dependencies = [
     "drf-spectacular>=0.28",
     "django-environ>=0.12",
     "psycopg[binary]>=3.2",
+    "cryptography>=50.0.2",
 ]
 
 [dependency-groups]

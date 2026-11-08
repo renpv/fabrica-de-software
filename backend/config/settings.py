@@ -13,7 +13,9 @@ DEBUG = env.bool("DJANGO_DEBUG", default=False)
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=[])
 FABRICA_URL_PUBLICA = env("FABRICA_URL_PUBLICA")
 # A primeira chave cifra; todas decifram (permite trocar a chave sem perder dados).
-FABRICA_CHAVES_COFRE = env.list("FABRICA_CHAVES_COFRE", default=[])
+FABRICA_CHAVES_COFRE = [
+    chave.strip() for chave in env.list("FABRICA_CHAVES_COFRE", default=[]) if chave.strip()
+]
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -24,6 +26,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "drf_spectacular",
+    "apps.cofre",
     "apps.donos",
     "apps.saude",
 ]
