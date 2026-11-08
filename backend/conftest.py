@@ -4,6 +4,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 
+from apps.agentes.models import ContaAgente
 from apps.donos.models import Dono, Membro
 
 
@@ -20,6 +21,27 @@ def membro_factory(db):
         )
         dono = dono or Dono.objects.create(nome=nome_do_dono or f"Dono {n}")
         return Membro.objects.create(usuario=usuario, dono=dono)
+
+    return criar
+
+
+@pytest.fixture
+def conta_factory(db):
+    """Cria uma conta de agente. Sem `dono`, cria um dono novo."""
+    contador = {"n": 0}
+
+    def criar(dono=None, tipo="cursor", credenciais=None, config=None, nome=None, **extra):
+        contador["n"] += 1
+        n = contador["n"]
+        dono = dono or Dono.objects.create(nome=f"Dono da conta {n}")
+        return ContaAgente.objects.create(
+            dono=dono,
+            nome=nome or f"Conta {n}",
+            tipo=tipo,
+            credenciais=credenciais if credenciais is not None else {},
+            config=config or {},
+            **extra,
+        )
 
     return criar
 

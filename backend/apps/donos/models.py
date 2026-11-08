@@ -44,3 +44,12 @@ class PertenceADono(models.Model):
 
     class Meta:
         abstract = True
+
+
+class Cliente(PertenceADono):
+    """Cliente do dono (por exemplo, uma empresa para quem ele desenvolve)."""
+
+    nome = models.CharField(max_length=120)
+
+    def __str__(self):
+        return self.nome
