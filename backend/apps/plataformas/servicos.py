@@ -86,6 +86,17 @@ def url_webhook_gitlab(conexao: ConexaoPlataforma) -> str:
     return f"{base}/api/webhooks/gitlab/{conexao.id}/"
 
 
+def url_webhook_github() -> str:
+    return f"{settings.FABRICA_URL_PUBLICA.rstrip('/')}/api/webhooks/github/"
+
+
+def url_webhook(conexao: ConexaoPlataforma) -> str:
+    """URL que a plataforma da conexão chama para avisar a central."""
+    if conexao.tipo == "gitlab":
+        return url_webhook_gitlab(conexao)
+    return url_webhook_github()
+
+
 def criar_conexao_gitlab(dono, nome: str, url_base: str, token: str) -> ConexaoPlataforma:
     """Valida, testa e só então grava a conexão. Levanta ConexaoRecusada (pt-BR)."""
     try:
@@ -230,6 +241,7 @@ def listar_repositorios(conexao: ConexaoPlataforma) -> list[Repositorio]:
 
 
 def excluir_conexao(conexao: ConexaoPlataforma) -> None:
+    """Levanta ProtectedError se a conexão ainda tem projetos."""
     conexao.delete()
 
 
@@ -247,5 +259,7 @@ __all__ = [
     "normalizar_url_gitlab",
     "testar_conexao",
     "url_de_erro",
+    "url_webhook",
+    "url_webhook_github",
     "url_webhook_gitlab",
 ]

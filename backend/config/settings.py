@@ -30,6 +30,7 @@ INSTALLED_APPS = [
     "apps.cofre",
     "apps.donos",
     "apps.plataformas",
+    "apps.projetos",
     "apps.saude",
 ]
 
