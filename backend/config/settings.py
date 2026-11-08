@@ -85,7 +85,10 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
-    "DEFAULT_THROTTLE_RATES": {"sessao": "10/min"},
+    # 0 = nenhum proxy confiável (usa o IP direto); atrás do Caddy, 1. Sem isso o
+    # X-Forwarded-For, que o cliente forja, burlaria o limite de login.
+    "NUM_PROXIES": env.int("DJANGO_NUM_PROXIES", default=0),
+    "DEFAULT_THROTTLE_RATES": {"sessao": "10/min", "sessao_usuario": "10/min"},
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 

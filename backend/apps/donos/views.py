@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 
 from . import servicos
 from .permissoes import TemDono
+from .throttles import LoginPorUsuarioThrottle
 
 MENSAGEM_CSRF = "Sessão expirada ou formulário inválido. Recarregue a página e tente de novo."
 
@@ -52,7 +53,11 @@ class SessaoView(APIView):
 
     def get_throttles(self):
         # Só as tentativas de login são limitadas.
-        return [ScopedRateThrottle()] if self.request.method == "POST" else []
+        return (
+            [ScopedRateThrottle(), LoginPorUsuarioThrottle()]
+            if self.request.method == "POST"
+            else []
+        )
 
     def throttled(self, request, wait):
         raise exceptions.Throttled(

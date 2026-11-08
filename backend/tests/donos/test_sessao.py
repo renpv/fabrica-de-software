@@ -124,3 +124,33 @@ def test_criar_dono_recusa_senha_fraca(db, monkeypatch):
     with pytest.raises(CommandError, match="muito curta"):
         call_command("criar_dono", nome="Casa", usuario="renato", email="r@example.com")
     assert not Membro.objects.exists()
+
+
+def test_limite_nao_confia_no_x_forwarded_for(client, membro_factory):
+    membro_factory(usuario__username="renato", senha="s3nha-forte")
+    codigos = [
+        client.post(
+            "/api/sessao/",
+            {"usuario": f"u{i}", "senha": "x"},
+            content_type="application/json",
+            HTTP_X_FORWARDED_FOR=f"203.0.113.{i}",
+        ).status_code
+        for i in range(11)
+    ]
+    assert codigos[:10] == [400] * 10
+    assert codigos[10] == 429
+
+
+def test_limite_por_usuario_vale_para_ips_diferentes(client, membro_factory):
+    membro_factory(usuario__username="renato", senha="s3nha-forte")
+    codigos = [
+        client.post(
+            "/api/sessao/",
+            {"usuario": " Renato " if i % 2 else "renato", "senha": "x"},
+            content_type="application/json",
+            REMOTE_ADDR=f"10.0.0.{i}",
+        ).status_code
+        for i in range(11)
+    ]
+    assert codigos[:10] == [400] * 10
+    assert codigos[10] == 429
