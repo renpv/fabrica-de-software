@@ -45,20 +45,50 @@ def token_valido(token) -> bool:
     )
 
 
+_REDES_PROIBIDAS = (
+    ipaddress.ip_network("100.64.0.0/10"),  # CGNAT (inclui 100.100.100.200, metadados da Alibaba)
+    ipaddress.ip_network("fd00:ec2::254/128"),  # metadados da AWS por IPv6
+    ipaddress.ip_network("100.100.100.200/32"),
+)
+_NAT64 = ipaddress.ip_network("64:ff9b::/96")
+
+
+def _candidatos(ip) -> list:
+    """O próprio IP e os IPv4 embutidos nele (mapeado, 6to4, Teredo, NAT64)."""
+    candidatos = [ip]
+    if isinstance(ip, ipaddress.IPv6Address):
+        if ip.ipv4_mapped is not None:
+            candidatos.append(ip.ipv4_mapped)
+        if ip.sixtofour is not None:
+            candidatos.append(ip.sixtofour)
+        if ip.teredo is not None:
+            candidatos.extend(ip.teredo)  # (servidor, cliente)
+        if ip in _NAT64:
+            candidatos.append(ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF))
+    return candidatos
+
+
 def _ip_proibido(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
-    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
-        ip = ip.ipv4_mapped
     # Redes privadas (RFC 1918, ULA) ficam permitidas: o GitLab pode estar na rede interna.
-    return (
-        ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved or ip.is_unspecified
-    )
+    for c in _candidatos(ip):
+        if (
+            c.is_loopback
+            or c.is_link_local
+            or c.is_multicast
+            or c.is_reserved
+            or c.is_unspecified
+            or any(c.version == r.version and c in r for r in _REDES_PROIBIDAS)
+        ):
+            return True
+    return False
 
 
-def verificar_destino(url: str) -> None:
-    """Recusa destinos que resolvem para loopback, link-local (inclui metadados de nuvem),
-    multicast, reservado ou não especificado. Toda resposta do DNS precisa passar.
+def resolver_destino(url: str) -> str:
+    """Resolve o host UMA vez e devolve o IP escolhido (literal, pronto para uso em URL).
 
-    Falha de resolução levanta a mensagem de rede (a mesma de qualquer falha de conexão)."""
+    Todo endereço devolvido pelo DNS precisa passar na checagem; quem conecta usa este IP,
+    então o DNS não pode mudar entre a checagem e a conexão. Falha de resolução levanta a
+    mensagem de rede (a mesma de qualquer falha de conexão). A mensagem nunca mostra o IP."""
     partes = urlsplit(url)
     msg_rede = ErroDePlataforma(
         f"Não consegui acessar {url}. "
@@ -68,13 +98,15 @@ def verificar_destino(url: str) -> None:
     try:
         porta = partes.port or (443 if partes.scheme == "https" else 80)
         infos = socket.getaddrinfo(partes.hostname, porta, type=socket.SOCK_STREAM)
-        enderecos = {ipaddress.ip_address(i[4][0].split("%")[0]) for i in infos}
+        enderecos = [ipaddress.ip_address(i[4][0].split("%")[0]) for i in infos]
     except OSError, ValueError, UnicodeError:
         raise msg_rede from None
     if not enderecos:
         raise msg_rede
     if any(_ip_proibido(ip) for ip in enderecos):
         raise ErroDePlataforma(MSG_INTERNO, COD_INTERNO)
+    ip = enderecos[0]
+    return f"[{ip}]" if ip.version == 6 else str(ip)
 
 
 def erro_de_status(resposta) -> ErroDePlataforma:
@@ -113,16 +145,24 @@ class GitLabAdaptador:
     def _requisitar(self, metodo: str, caminho: str, **opcoes):
         if not token_valido(self._token):
             raise ErroDePlataforma(MSG_TOKEN_INVALIDO, COD_TOKEN)
-        verificar_destino(self._url)  # a cada chamada: o DNS pode mudar depois de salvar
+        # Uma resolução por chamada; a conexão vai direto ao IP conferido (sem novo DNS).
+        ip = resolver_destino(self._url)
+        original = urlsplit(self._url)
+        netloc = f"{ip}:{original.port}" if original.port else ip
+        url = f"{original.scheme}://{netloc}{original.path}/api/v4{caminho}"
+        extensoes = {"sni_hostname": original.hostname} if original.scheme == "https" else {}
         try:
-            return httpx.request(
-                metodo,
-                f"{self._url}/api/v4{caminho}",
-                headers={"PRIVATE-TOKEN": self._token},
-                timeout=TIMEOUT_SEGUNDOS,
-                follow_redirects=False,
-                **opcoes,
-            )
+            # trust_env=False: proxy do ambiente faria o DNS por fora do IP conferido.
+            with httpx.Client(
+                timeout=TIMEOUT_SEGUNDOS, follow_redirects=False, trust_env=False
+            ) as cliente:
+                return cliente.request(
+                    metodo,
+                    url,
+                    headers={"PRIVATE-TOKEN": self._token, "Host": original.netloc},
+                    extensions=extensoes,
+                    **opcoes,
+                )
         except httpx.TransportError:
             raise ErroDePlataforma(
                 f"Não consegui acessar {self._url}. "

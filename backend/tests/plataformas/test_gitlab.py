@@ -13,7 +13,8 @@ from apps.plataformas.etiquetas import ETIQUETAS_FIXAS
 from apps.plataformas.models import ConexaoPlataforma
 
 URL = "https://gitlab.unilab.edu.br"
-API = f"{URL}/api/v4"
+IP = "203.0.113.10"
+API = f"https://{IP}/api/v4"  # a conexão vai ao IP resolvido, não ao nome
 BASE = "/api/conexoes-plataforma/"
 TOKEN = "token-de-teste-fake"
 MSG_REDE = (
@@ -34,7 +35,7 @@ def _dns(*ips):
 @pytest.fixture(autouse=True)
 def dns_publico(monkeypatch):
     """Sem DNS real: por padrão, todo host resolve para um IP público."""
-    monkeypatch.setattr("socket.getaddrinfo", _dns("203.0.113.10"))
+    monkeypatch.setattr("socket.getaddrinfo", _dns(IP))
 
 
 @pytest.fixture
@@ -288,7 +289,7 @@ def test_criar_recusa_host_que_resolve_para_loopback(client, logado, monkeypatch
 @respx.mock
 def test_criar_aceita_rede_privada(client, logado, monkeypatch):
     monkeypatch.setattr("socket.getaddrinfo", _dns("10.1.2.3"))
-    respx.get("https://git.interno/api/v4/personal_access_tokens/self").respond(
+    respx.get("https://10.1.2.3/api/v4/personal_access_tokens/self").respond(
         200, json={"scopes": ["api"]}
     )
     r = _post(client, {"nome": "GL", "url_base": "git.interno", "token": TOKEN})
@@ -302,6 +303,83 @@ def test_falha_de_dns_mantem_mensagem_de_rede(client, logado, monkeypatch):
     monkeypatch.setattr("socket.getaddrinfo", falha)
     r = _post(client, {"nome": "GL", "url_base": URL, "token": TOKEN})
     assert r.status_code == 400 and r.json() == {"detail": MSG_REDE}
+
+
+_BLOQUEADOS = [
+    "2002:7f00:1::1",  # 6to4 de 127.0.0.1
+    "2002:a9fe:a9fe::1",  # 6to4 de 169.254.169.254
+    "2001:0:7f00:1:0:0:f7f7:f7f7",  # Teredo, servidor 127.0.0.1
+    "2001:0:808:808:0:0:80ff:fffe",  # Teredo, cliente 127.0.0.1
+    "64:ff9b::7f00:1",  # NAT64 de 127.0.0.1
+    "64:ff9b::a9fe:a9fe",  # NAT64 de 169.254.169.254
+    "::ffff:169.254.169.254",
+    "100.64.0.1", "100.127.255.254", "100.100.100.200", "fd00:ec2::254",
+]  # fmt: skip
+
+
+@respx.mock
+@pytest.mark.parametrize("ip", _BLOQUEADOS)
+def test_denylist_estendida(conexao_gitlab, monkeypatch, ip):
+    monkeypatch.setattr("socket.getaddrinfo", _dns(ip))
+    assert "rede reservada" in obter_adaptador(conexao_gitlab).testar().mensagem
+    assert len(respx.calls) == 0
+
+
+@respx.mock
+@pytest.mark.parametrize(
+    "ip", ["10.0.0.5", "192.168.1.1", "172.16.0.1", "fd12::1", "2002:808:808::1"]
+)
+def test_privados_e_publicos_continuam_permitidos(conexao_gitlab, monkeypatch, ip):
+    monkeypatch.setattr("socket.getaddrinfo", _dns(ip))
+    host = f"[{ip}]" if ":" in ip else ip
+    respx.get(f"https://{host}/api/v4/personal_access_tokens/self").respond(
+        200, json={"scopes": ["api"]}
+    )
+    assert obter_adaptador(conexao_gitlab).testar().ok
+
+
+@respx.mock
+def test_conexao_vai_ao_ip_conferido_com_host_e_sni(conexao_gitlab, monkeypatch):
+    rota = respx.get(f"{API}/personal_access_tokens/self").respond(200, json={"scopes": ["api"]})
+    assert obter_adaptador(conexao_gitlab).testar().ok
+    req = rota.calls.last.request
+    assert req.url.host == IP
+    assert req.headers["host"] == "gitlab.unilab.edu.br"
+    assert req.extensions["sni_hostname"] == "gitlab.unilab.edu.br"
+
+
+@respx.mock
+def test_porta_e_caminho_originais_vao_no_ip(conexao_gitlab):
+    conexao_gitlab.url_base = "http://interno:8080/gitlab"
+    rota = respx.get(f"http://{IP}:8080/gitlab/api/v4/personal_access_tokens/self").respond(
+        200, json={"scopes": ["api"]}
+    )
+    assert obter_adaptador(conexao_gitlab).testar().ok
+    req = rota.calls.last.request
+    assert req.headers["host"] == "interno:8080" and "sni_hostname" not in req.extensions
+
+
+@respx.mock
+def test_uma_resolucao_por_requisicao_nao_cai_em_loopback(conexao_gitlab, monkeypatch):
+    respostas = iter([_dns(IP), _dns("127.0.0.1")])
+    chamadas = []
+
+    def rebinding(*a, **k):
+        chamadas.append(a)
+        return next(respostas)(*a, **k)
+
+    monkeypatch.setattr("socket.getaddrinfo", rebinding)
+    rota = respx.get(f"{API}/personal_access_tokens/self").respond(200, json={"scopes": ["api"]})
+    assert obter_adaptador(conexao_gitlab).testar().ok
+    assert len(chamadas) == 1
+    assert rota.calls.last.request.url.host == IP
+
+
+@respx.mock
+def test_erro_de_rede_mostra_url_original_e_nunca_o_ip(conexao_gitlab):
+    respx.get(f"{API}/personal_access_tokens/self").mock(side_effect=httpx.ConnectError("x"))
+    mensagem = obter_adaptador(conexao_gitlab).testar().mensagem
+    assert mensagem == MSG_REDE and IP not in mensagem
 
 
 @respx.mock
