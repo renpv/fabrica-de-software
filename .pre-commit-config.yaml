@@ -1,0 +1,45 @@
+# Base comum de hooks do git para todos os projetos (framework pre-commit).
+# Copie para a raiz do projeto como .pre-commit-config.yaml e acrescente os
+# hooks da linguagem e os testes nos blocos marcados abaixo.
+# Atualizar as versões: pre-commit autoupdate
+default_install_hook_types: [pre-commit, pre-push]
+default_stages: [pre-commit]
+
+repos:
+  # --- pre-commit: rápido, roda em todo commit ---
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: detect-private-key
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
+  # --- Linguagem do projeto (exemplo para Python; troque conforme o projeto) ---
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.4
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  # --- pre-push: pode demorar mais, roda antes de enviar ---
+  - repo: local
+    hooks:
+      - id: testes-rapidos
+        name: verificação completa (automacao/verificar.sh)
+        stages: [pre-push]
+        language: system
+        pass_filenames: false
+        # Troque pelo comando de testes do projeto (ex.: pytest -q -x, npm test).
+        entry: automacao/verificar.sh

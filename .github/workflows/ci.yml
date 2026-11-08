@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgres:18
+        env:
+          POSTGRES_USER: fabrica
+          POSTGRES_PASSWORD: fabrica
+          POSTGRES_DB: fabrica
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fabrica"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://fabrica:fabrica@localhost:5432/fabrica
+      DJANGO_SECRET_KEY: chave-so-para-o-ci
+      FABRICA_URL_PUBLICA: http://localhost:8000
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.13.7"
+      - name: Verificação completa
+        run: automacao/verificar.sh

@@ -1,0 +1,21 @@
+# Banco de desenvolvimento e testes. A porta 5434 evita o conflito com o top-tenis (5433).
+# Na imagem postgres:18 o volume é montado em /var/lib/postgresql, e não em .../data.
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: fabrica
+      POSTGRES_PASSWORD: fabrica
+      POSTGRES_DB: fabrica
+    ports:
+      - "5434:5432"
+    volumes:
+      - fabrica_pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fabrica"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  fabrica_pgdata:
