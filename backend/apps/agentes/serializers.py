@@ -104,7 +104,7 @@ class ContaAgenteSerializer(_ValidaCredenciais, serializers.ModelSerializer):
         if "credenciais" in dados or self.instance is None:
             tipo = self.instance.tipo if self.instance else dados.get("tipo")
             dados["credenciais"] = self._credenciais(
-                tipo, dados.get("credenciais", {}), exigir_obrigatorias=self.instance is None
+                tipo, dados.get("credenciais", {}), exigir_obrigatorias=True
             )
         return dados
 

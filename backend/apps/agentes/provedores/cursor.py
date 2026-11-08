@@ -46,6 +46,15 @@ class ProvedorCursor:
                 headers={"Authorization": f"Bearer {chave}"},
                 timeout=TIMEOUT_SEGUNDOS,
             )
+        except UnicodeEncodeError:
+            return ResultadoTeste(
+                ok=False,
+                status="falha",
+                mensagem=(
+                    "A chave tem caracteres inválidos (acentos ou aspas). "
+                    "Cole só a chave, sem aspas."
+                ),
+            )
         except httpx.TransportError:
             return ResultadoTeste(
                 ok=False,

@@ -201,3 +201,60 @@ def test_resposta_nunca_tem_credenciais(client, logado):
         )
     )
     assert 400 in vistas and 201 in vistas and 200 in vistas
+
+
+MENSAGEM_INVALIDA = (
+    "A chave tem caracteres inválidos (acentos ou aspas). Cole só a chave, sem aspas."
+)
+
+
+@respx.mock
+def test_testar_sem_salvar_recusa_caracteres_invalidos(client, logado):
+    r = _json(
+        client, "post", "/api/contas-agente/testar/",
+        {"tipo": "cursor", "credenciais": {"api_key": "chave—x"}, "config": {}},
+    )  # fmt: skip
+    assert r.status_code == 400
+    assert r.json()["credenciais"] == [MENSAGEM_INVALIDA]
+    assert "chave—x" not in r.content.decode()
+
+
+def test_criar_e_patch_recusam_caracteres_invalidos(client, logado, conta_factory):
+    assert _criar(client, credenciais={"api_key": "“k”"}).status_code == 400
+    conta = conta_factory(dono=logado.dono, credenciais={"api_key": "ok"})
+    r = _json(
+        client, "patch", f"/api/contas-agente/{conta.id}/", {"credenciais": {"api_key": "çk"}}
+    )
+    assert r.status_code == 400 and r.json()["credenciais"] == [MENSAGEM_INVALIDA]
+
+
+def test_testar_conta_salva_com_valor_invalido_nao_da_500(client, logado, conta_factory):
+    conta = conta_factory(dono=logado.dono, credenciais={"api_key": "chave—secreta"})
+    r = client.post(f"/api/contas-agente/{conta.id}/testar/")
+    assert r.status_code == 200
+    assert r.json() == {"ok": False, "status": "falha", "mensagem": MENSAGEM_INVALIDA}
+    assert "chave—secreta" not in r.content.decode()
+
+
+@pytest.mark.parametrize("credenciais", [{}, {"api_key": "  "}])
+def test_patch_com_credenciais_vazias_da_400_e_mantem(client, logado, conta_factory, credenciais):
+    conta = conta_factory(dono=logado.dono, credenciais={"api_key": "guardada"})
+    r = _json(client, "patch", f"/api/contas-agente/{conta.id}/", {"credenciais": credenciais})
+    assert r.status_code == 400 and "Chave de API do Cursor" in r.json()["credenciais"][0]
+    conta.refresh_from_db()
+    assert dict(conta.credenciais) == {"api_key": "guardada"}
+
+
+def test_patch_de_cliente_de_outro_dono_da_400(client, logado, conta_factory, membro_factory):
+    alheio = Cliente.objects.create(dono=membro_factory().dono, nome="Alheio")
+    conta = conta_factory(dono=logado.dono)
+    r = _json(client, "patch", f"/api/contas-agente/{conta.id}/", {"cliente": str(alheio.id)})
+    assert r.status_code == 400 and "cliente" in r.json()
+
+
+def test_excluir_cliente_com_conta_deixa_a_conta_sem_cliente(client, logado, conta_factory):
+    cliente = Cliente.objects.create(dono=logado.dono, nome="Meu")
+    conta = conta_factory(dono=logado.dono, cliente=cliente)
+    assert client.delete(f"/api/clientes/{cliente.id}/").status_code == 204
+    conta.refresh_from_db()
+    assert conta.cliente is None

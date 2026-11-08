@@ -7,6 +7,10 @@ from django.utils import timezone
 from .models import ContaAgente
 from .provedores import REGISTRO, ResultadoTeste, obter_provedor
 
+MENSAGEM_CHAVE_INVALIDA = (
+    "A chave tem caracteres inválidos (acentos ou aspas). Cole só a chave, sem aspas."
+)
+
 
 def limpar_credenciais(tipo: str, dados: dict[str, str]) -> dict[str, str]:
     """Tira espaços e quebras de linha das pontas de cada valor (as internas ficam: chave PEM)."""
@@ -66,6 +70,10 @@ def validar_credenciais(tipo: str, dados: object, *, exigir_obrigatorias: bool) 
             f"{', '.join(desconhecidas)}. Remova-o e tente de novo."
         )
     limpas = limpar_credenciais(tipo, dados)
+    for campo in provedor.campos:
+        valor = limpas.get(campo.chave, "")
+        if campo.secreto and valor and not (valor.isascii() and valor.isprintable()):
+            raise ValueError(MENSAGEM_CHAVE_INVALIDA)
     if exigir_obrigatorias:
         for campo in provedor.campos:
             if campo.secreto and campo.obrigatorio and not limpas.get(campo.chave):
@@ -90,7 +98,10 @@ def atualizar_conta(conta: ContaAgente, dados: dict) -> ContaAgente:
         conta.status = ContaAgente.Status.NAO_TESTADA
     for campo, valor in dados.items():
         setattr(conta, campo, valor)
-    conta.save()
+    campos = {*dados, "atualizado_em"}
+    if "credenciais" in dados:
+        campos.add("status")
+    conta.save(update_fields=sorted(campos))
     return conta
 
 
