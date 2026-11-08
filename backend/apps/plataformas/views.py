@@ -16,6 +16,7 @@ from . import servicos
 from .models import ConexaoPlataforma
 from .serializers import (
     ConexaoPlataformaSerializer,
+    CriarGitLabSerializer,
     ErroSerializer,
     InstaladoGitHubSerializer,
     ManifestoPedidoSerializer,
@@ -62,6 +63,30 @@ class ManifestoGitHubView(_ViewDoDono):
         if not nome:
             return Response({"nome": ["Informe um nome para a conexão."]}, status=400)
         return Response(servicos.gerar_manifesto(request.dono, nome))
+
+
+class CriarGitLabView(_ViewDoDono):
+    """Conecta uma instância GitLab por token: testa e só grava se o teste passar."""
+
+    @extend_schema(
+        request=CriarGitLabSerializer,
+        responses={201: ConexaoPlataformaSerializer, 400: ErroSerializer},
+        operation_id="conexoes_plataforma_gitlab_criar",
+    )
+    def post(self, request):
+        pedido = CriarGitLabSerializer(data=request.data)
+        pedido.is_valid(raise_exception=True)
+        dados = pedido.validated_data
+        nome = dados["nome"].strip()
+        if not nome:
+            return Response({"nome": ["Informe um nome para a conexão."]}, status=400)
+        try:
+            conexao = servicos.criar_conexao_gitlab(
+                request.dono, nome, dados["url_base"], dados["token"]
+            )
+        except servicos.ConexaoRecusada as erro:
+            return Response({"detail": str(erro)}, status=400)
+        return Response(ConexaoPlataformaSerializer(conexao).data, status=201)
 
 
 def _validar_consulta(serializer_class, request):

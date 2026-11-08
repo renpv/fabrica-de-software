@@ -3,8 +3,9 @@
 from ..models import ConexaoPlataforma
 from .base import AdaptadorPlataforma
 from .github import GitHubAdaptador
+from .gitlab import GitLabAdaptador
 
-REGISTRO = {"github": GitHubAdaptador}  # o GitLab entra na Task 7
+REGISTRO = {"github": GitHubAdaptador, "gitlab": GitLabAdaptador}
 
 
 def obter_adaptador(conexao: ConexaoPlataforma) -> AdaptadorPlataforma:
