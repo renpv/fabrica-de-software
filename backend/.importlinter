@@ -17,6 +17,7 @@ forbidden_modules =
     apps.saude
     apps.cofre
     apps.agentes
+    apps.plataformas
 allow_indirect_imports = True
 
 [importlinter:contract:saude-isolado]
@@ -28,6 +29,7 @@ forbidden_modules =
     apps.donos
     apps.cofre
     apps.agentes
+    apps.plataformas
 allow_indirect_imports = True
 
 [importlinter:contract:cofre-isolado]
@@ -39,6 +41,7 @@ forbidden_modules =
     apps.donos
     apps.saude
     apps.agentes
+    apps.plataformas
 allow_indirect_imports = True
 
 [importlinter:contract:agentes]
@@ -48,4 +51,15 @@ source_modules =
     apps.agentes
 forbidden_modules =
     apps.saude
+    apps.plataformas
+allow_indirect_imports = True
+
+[importlinter:contract:plataformas]
+name = O módulo plataformas só importa cofre e donos
+type = forbidden
+source_modules =
+    apps.plataformas
+forbidden_modules =
+    apps.saude
+    apps.agentes
 allow_indirect_imports = True
