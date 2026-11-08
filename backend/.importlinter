@@ -1,0 +1,18 @@
+# Contratos de importação entre os módulos de apps/.
+# Cada task que cria um módulo acrescenta aqui o contrato dele (ver CLAUDE.md):
+#   cofre e donos      -> não importam nenhum outro módulo
+#   agentes, plataformas -> só importam cofre e donos
+#   fluxos             -> importa agentes
+#   projetos           -> importa plataformas, fluxos e agentes
+# Views e API só chamam servicos.py (a regra de negócio fica na camada de serviços).
+[importlinter]
+root_package = apps
+
+[importlinter:contract:saude-isolado]
+name = O módulo saude não importa nenhum outro módulo de apps
+type = forbidden
+source_modules =
+    apps.saude
+forbidden_modules =
+    apps.*
+allow_indirect_imports = True
