@@ -7,7 +7,7 @@ Fala com plataformas e agentes só pelas interfaces públicas deles (`obter_adap
 import re
 from dataclasses import asdict
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from apps.agentes.provedores import REGISTRO as PROVEDORES
@@ -20,6 +20,8 @@ from .models import Projeto
 
 # `dono/repo` no GitHub; no GitLab pode haver grupos aninhados (`a/b/c`).
 CAMINHO_VALIDO = re.compile(r"^[\w.-]+(/[\w.-]+)+$")
+
+MSG_DUPLICADO = "Esse repositório já está cadastrado como projeto."
 
 
 class ErroDeProjeto(Exception):
@@ -72,41 +74,45 @@ def preparar_projeto(projeto: Projeto) -> list[ItemConferencia]:
 def criar_projeto(dono, *, nome, conexao, repositorio_id_externo, cliente=None) -> Projeto:
     """Busca o repositório na listagem da plataforma, grava o projeto e já o prepara.
 
-    A busca e a gravação são uma transação só. Se o `preparar` falhar depois, o projeto fica
-    gravado (a pessoa tenta de novo em «Preparar») e a mensagem vai em `erro_ao_preparar`.
+    A listagem fica fora de transação (é chamada de rede). Se o `preparar` falhar depois,
+    o projeto fica gravado (a pessoa tenta de novo em «Preparar») e a mensagem vai em
+    `erro_ao_preparar`.
     Levanta ErroDeProjeto (pedido recusado) ou ErroDePlataforma (listagem falhou).
     """
     if conexao.dono_id != dono.id or (cliente is not None and cliente.dono_id != dono.id):
         raise ErroDeProjeto("Conexão ou cliente não encontrado. Escolha um dos seus.")
-    with transaction.atomic():
-        repo = next(
-            (r for r in obter_adaptador(conexao).listar_repositorios()
-             if r.id_externo == repositorio_id_externo),
-            None,
-        )  # fmt: skip
-        if repo is None:
-            raise ErroDeProjeto(
-                "Esse repositório não está acessível por esta conexão. "
-                "Confira o acesso do token ou do App e tente de novo."
-            )
-        if not CAMINHO_VALIDO.fullmatch(repo.caminho):
-            raise ErroDeProjeto(
-                "A plataforma devolveu um caminho de repositório inesperado. "
-                "Tente de novo ou escolha outro repositório."
-            )
-        if Projeto.objects.filter(
-            dono=dono, conexao=conexao, repositorio_id_externo=repo.id_externo
-        ).exists():
-            raise ErroDeProjeto("Esse repositório já está cadastrado como projeto.")
-        projeto = Projeto.objects.create(
-            dono=dono,
-            nome=nome,
-            conexao=conexao,
-            repositorio_caminho=repo.caminho,
-            repositorio_id_externo=repo.id_externo,
-            repositorio_url=repo.url_web,
-            cliente=cliente,
+    repo = next(
+        (
+            r
+            for r in obter_adaptador(conexao).listar_repositorios()
+            if r.id_externo == repositorio_id_externo
+        ),
+        None,
+    )
+    if repo is None:
+        raise ErroDeProjeto(
+            "Esse repositório não está acessível por esta conexão. "
+            "Confira o acesso do token ou do App e tente de novo."
         )
+    if not CAMINHO_VALIDO.fullmatch(repo.caminho):
+        raise ErroDeProjeto(
+            "A plataforma devolveu um caminho de repositório inesperado. "
+            "Tente de novo ou escolha outro repositório."
+        )
+    try:
+        # Savepoint próprio: a unicidade é garantida pelo banco, sem corrida entre pedidos.
+        with transaction.atomic():
+            projeto = Projeto.objects.create(
+                dono=dono,
+                nome=nome,
+                conexao=conexao,
+                repositorio_caminho=repo.caminho,
+                repositorio_id_externo=repo.id_externo,
+                repositorio_url=repo.url_web,
+                cliente=cliente,
+            )
+    except IntegrityError:
+        raise ErroDeProjeto(MSG_DUPLICADO) from None
     try:
         preparar_projeto(projeto)
     except ErroDePlataforma as erro:

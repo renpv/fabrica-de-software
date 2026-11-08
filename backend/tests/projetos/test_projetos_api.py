@@ -165,3 +165,45 @@ def test_excluir_conexao_com_projeto_da_409(client, logado, conexao, adaptador_f
 
 def test_exige_login(client):
     assert client.get(BASE).status_code in (401, 403)
+
+
+def test_corrida_na_criacao_da_400(client, logado, conexao, adaptador_falso, monkeypatch):
+    original = adaptador_falso.listar_repositorios
+
+    def lista_e_duplica(self):
+        itens = original(self)
+        Projeto.objects.create(
+            dono=conexao.dono, nome="Outro", conexao=conexao, repositorio_caminho="grupo/projeto",
+            repositorio_id_externo="42", repositorio_url="https://git.exemplo.com/grupo/projeto",
+        )  # fmt: skip
+        return itens
+
+    monkeypatch.setattr(adaptador_falso, "listar_repositorios", lista_e_duplica)
+    r = _json(client, "post", BASE, _corpo(conexao))
+    assert r.status_code == 400
+    assert r.json()["detail"] == "Esse repositório já está cadastrado como projeto."
+
+
+def test_patch_com_cliente_de_outro_dono_da_400(client, logado, conexao, adaptador_falso):
+    pid = _json(client, "post", BASE, _corpo(conexao)).json()["id"]
+    alheio = Cliente.objects.create(dono=Dono.objects.create(nome="Outro"), nome="Alheio")
+
+    r = _json(client, "patch", f"{BASE}{pid}/", {"nome": "Mudou", "cliente": str(alheio.id)})
+
+    assert r.status_code == 400
+    projeto = Projeto.objects.get(pk=pid)
+    assert projeto.nome == "Meu projeto"
+    assert projeto.cliente_id is None
+
+
+def test_patch_define_e_limpa_cliente(client, logado, conexao, adaptador_falso, cliente_do_dono):
+    pid = _json(client, "post", BASE, _corpo(conexao)).json()["id"]
+
+    r = _json(client, "patch", f"{BASE}{pid}/", {"cliente": str(cliente_do_dono.id)})
+    assert r.status_code == 200
+    assert r.json()["cliente"] == str(cliente_do_dono.id)
+
+    r = _json(client, "patch", f"{BASE}{pid}/", {"cliente": None})
+    assert r.status_code == 200
+    assert r.json()["cliente"] is None
+    assert Projeto.objects.get(pk=pid).cliente_id is None

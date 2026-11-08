@@ -106,3 +106,24 @@ def test_falha_ao_preparar_mantem_o_projeto(conexao, adaptador_falso):
     assert Projeto.objects.filter(pk=projeto.pk).exists()
     assert projeto.ultima_conferencia == []
     assert "Tente de novo" in projeto.erro_ao_preparar
+
+
+def test_corrida_na_criacao_vira_erro_de_projeto(conexao, adaptador_falso, monkeypatch):
+    """O duplicado aparece entre a listagem e a gravação: o banco recusa, sem 500."""
+    original = adaptador_falso.listar_repositorios
+
+    def lista_e_duplica(self):
+        itens = original(self)
+        Projeto.objects.create(
+            dono=conexao.dono, nome="Outro pedido", conexao=conexao,
+            repositorio_caminho="grupo/projeto", repositorio_id_externo="42",
+            repositorio_url="https://git.exemplo.com/grupo/projeto",
+        )  # fmt: skip
+        return itens
+
+    monkeypatch.setattr(adaptador_falso, "listar_repositorios", lista_e_duplica)
+
+    with pytest.raises(servicos.ErroDeProjeto) as erro:
+        _criar(conexao)
+    assert str(erro.value) == servicos.MSG_DUPLICADO
+    assert Projeto.objects.count() == 1

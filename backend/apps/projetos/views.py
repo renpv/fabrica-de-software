@@ -26,6 +26,9 @@ def _conferencia(projeto, itens) -> Response:
     )
 
 
+_RESPOSTAS_CONFERENCIA = {200: ConferenciaSerializer, 400: ErroSerializer, 502: ErroSerializer}
+
+
 class ProjetoViewSet(
     EscopoDoDonoMixin,
     mixins.ListModelMixin,
@@ -77,13 +80,19 @@ class ProjetoViewSet(
             return Response({"detail": str(erro)}, status=502)
         return _conferencia(projeto, itens)
 
-    @extend_schema(request=None, responses={200: ConferenciaSerializer, 502: ErroSerializer})
+    @extend_schema(
+        request=None,
+        responses={200: ConferenciaSerializer, 400: ErroSerializer, 502: ErroSerializer},
+    )
     @action(detail=True, methods=["post"], url_path="conferir")
     def conferir(self, request, pk=None):
         """Confere o repositório (etiquetas, webhook) sem alterar nada."""
         return self._rodar(servicos.conferir_projeto)
 
-    @extend_schema(request=None, responses={200: ConferenciaSerializer, 502: ErroSerializer})
+    @extend_schema(
+        request=None,
+        responses={200: ConferenciaSerializer, 400: ErroSerializer, 502: ErroSerializer},
+    )
     @action(detail=True, methods=["post"], url_path="preparar")
     def preparar(self, request, pk=None):
         """Cria o que falta no repositório. Pode ser repetido."""
