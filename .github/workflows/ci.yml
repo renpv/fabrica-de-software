@@ -29,6 +29,8 @@ jobs:
       DATABASE_URL: postgres://fabrica:fabrica@localhost:5432/fabrica
       DJANGO_SECRET_KEY: chave-so-para-o-ci
       FABRICA_URL_PUBLICA: http://localhost:8000
+      # Chave Fernet só para o CI; não é usada em nenhum ambiente real.
+      FABRICA_CHAVES_COFRE: wE4d6T-2qefhzG4CJH6IH9zc6fx0Bo4LzxoW3Pn9V4I=
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.3
