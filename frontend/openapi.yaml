@@ -1,0 +1,662 @@
+openapi: 3.0.3
+info:
+  title: Fábrica de software
+  version: 0.1.0
+  description: API que orquestra agentes de IA para implementar projetos.
+paths:
+  /api/clientes/:
+    get:
+      operationId: clientes_list
+      description: Clientes do dono logado.
+      tags:
+      - clientes
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Cliente'
+          description: ''
+    post:
+      operationId: clientes_create
+      description: Clientes do dono logado.
+      tags:
+      - clientes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Cliente'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Cliente'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Cliente'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cliente'
+          description: ''
+  /api/clientes/{id}/:
+    get:
+      operationId: clientes_retrieve
+      description: Clientes do dono logado.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Um string UUID que identifica este cliente.
+        required: true
+      tags:
+      - clientes
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cliente'
+          description: ''
+    put:
+      operationId: clientes_update
+      description: Clientes do dono logado.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Um string UUID que identifica este cliente.
+        required: true
+      tags:
+      - clientes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Cliente'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Cliente'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Cliente'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cliente'
+          description: ''
+    patch:
+      operationId: clientes_partial_update
+      description: Clientes do dono logado.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Um string UUID que identifica este cliente.
+        required: true
+      tags:
+      - clientes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCliente'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCliente'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCliente'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cliente'
+          description: ''
+    delete:
+      operationId: clientes_destroy
+      description: Clientes do dono logado.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Um string UUID que identifica este cliente.
+        required: true
+      tags:
+      - clientes
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/contas-agente/:
+    get:
+      operationId: contas_agente_list
+      description: Contas de agente do dono logado. As credenciais são só de escrita.
+      tags:
+      - contas-agente
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ContaAgente'
+          description: ''
+    post:
+      operationId: contas_agente_create
+      description: Contas de agente do dono logado. As credenciais são só de escrita.
+      tags:
+      - contas-agente
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContaAgente'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ContaAgente'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ContaAgente'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContaAgente'
+          description: ''
+  /api/contas-agente/{id}/:
+    get:
+      operationId: contas_agente_retrieve
+      description: Contas de agente do dono logado. As credenciais são só de escrita.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Um string UUID que identifica este conta agente.
+        required: true
+      tags:
+      - contas-agente
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContaAgente'
+          description: ''
+    put:
+      operationId: contas_agente_update
+      description: Contas de agente do dono logado. As credenciais são só de escrita.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Um string UUID que identifica este conta agente.
+        required: true
+      tags:
+      - contas-agente
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContaAgente'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ContaAgente'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ContaAgente'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContaAgente'
+          description: ''
+    patch:
+      operationId: contas_agente_partial_update
+      description: Contas de agente do dono logado. As credenciais são só de escrita.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Um string UUID que identifica este conta agente.
+        required: true
+      tags:
+      - contas-agente
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedContaAgente'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedContaAgente'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedContaAgente'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContaAgente'
+          description: ''
+    delete:
+      operationId: contas_agente_destroy
+      description: Contas de agente do dono logado. As credenciais são só de escrita.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Um string UUID que identifica este conta agente.
+        required: true
+      tags:
+      - contas-agente
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/contas-agente/{id}/testar/:
+    post:
+      operationId: contas_agente_testar
+      description: Testa a conta salva e grava o resultado nela.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Um string UUID que identifica este conta agente.
+        required: true
+      tags:
+      - contas-agente
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultadoTeste'
+          description: ''
+  /api/contas-agente/testar/:
+    post:
+      operationId: contas_agente_testar_dados
+      description: Testa tipo, credenciais e config sem gravar nada.
+      tags:
+      - contas-agente
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TesteDeDados'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TesteDeDados'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TesteDeDados'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultadoTeste'
+          description: ''
+  /api/saude/:
+    get:
+      operationId: saude_retrieve
+      description: Diz se o serviço está no ar. Sem login, para o monitoramento usar.
+      tags:
+      - saude
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/sessao/:
+    get:
+      operationId: sessao_retrieve
+      description: Login (POST), sessão atual (GET) e logout (DELETE). Entrega o cookie
+        `csrftoken`.
+      tags:
+      - sessao
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: sessao_create
+      description: Login (POST), sessão atual (GET) e logout (DELETE). Entrega o cookie
+        `csrftoken`.
+      tags:
+      - sessao
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Login'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Login'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Login'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+        '400':
+          description: No response body
+    delete:
+      operationId: sessao_destroy
+      description: Login (POST), sessão atual (GET) e logout (DELETE). Entrega o cookie
+        `csrftoken`.
+      tags:
+      - sessao
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/tipos-de-agente/:
+    get:
+      operationId: tipos_de_agente_list
+      description: Os tipos de agente disponíveis, com os campos de cadastro e o passo
+        a passo.
+      tags:
+      - tipos-de-agente
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TipoDeAgente'
+          description: ''
+components:
+  schemas:
+    CampoCadastro:
+      type: object
+      properties:
+        chave:
+          type: string
+        rotulo:
+          type: string
+        secreto:
+          type: boolean
+        ajuda:
+          type: string
+        obrigatorio:
+          type: boolean
+      required:
+      - ajuda
+      - chave
+      - obrigatorio
+      - rotulo
+      - secreto
+    Cliente:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        nome:
+          type: string
+          maxLength: 120
+      required:
+      - id
+      - nome
+    ContaAgente:
+      type: object
+      description: Conta de agente. `credenciais` só entra; a leitura devolve `tem_credenciais`.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        nome:
+          type: string
+          maxLength: 120
+        tipo:
+          type: string
+        cliente:
+          type: string
+          format: uuid
+          nullable: true
+        config: {}
+        limite_simultaneo:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusEnum'
+          readOnly: true
+        ultimo_teste_em:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        ultimo_teste_mensagem:
+          type: string
+          readOnly: true
+        tem_credenciais:
+          type: boolean
+          readOnly: true
+        credenciais:
+          writeOnly: true
+      required:
+      - id
+      - nome
+      - status
+      - tem_credenciais
+      - tipo
+      - ultimo_teste_em
+      - ultimo_teste_mensagem
+    Login:
+      type: object
+      properties:
+        usuario:
+          type: string
+        senha:
+          type: string
+          writeOnly: true
+      required:
+      - senha
+      - usuario
+    PassoGuia:
+      type: object
+      properties:
+        texto:
+          type: string
+        link:
+          type: string
+          nullable: true
+      required:
+      - link
+      - texto
+    PatchedCliente:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        nome:
+          type: string
+          maxLength: 120
+    PatchedContaAgente:
+      type: object
+      description: Conta de agente. `credenciais` só entra; a leitura devolve `tem_credenciais`.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        nome:
+          type: string
+          maxLength: 120
+        tipo:
+          type: string
+        cliente:
+          type: string
+          format: uuid
+          nullable: true
+        config: {}
+        limite_simultaneo:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusEnum'
+          readOnly: true
+        ultimo_teste_em:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        ultimo_teste_mensagem:
+          type: string
+          readOnly: true
+        tem_credenciais:
+          type: boolean
+          readOnly: true
+        credenciais:
+          writeOnly: true
+    ResultadoTeste:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        status:
+          type: string
+        mensagem:
+          type: string
+      required:
+      - mensagem
+      - ok
+      - status
+    StatusEnum:
+      enum:
+      - nao_testada
+      - ok
+      - falha
+      - aguardando_runner
+      type: string
+      description: |-
+        * `nao_testada` - Não testada
+        * `ok` - Funcionando
+        * `falha` - Com falha
+        * `aguardando_runner` - Aguardando o runner
+    TesteDeDados:
+      type: object
+      description: Dados de uma conta ainda não salva, para testar a conexão.
+      properties:
+        tipo:
+          type: string
+        credenciais:
+          writeOnly: true
+        config: {}
+      required:
+      - tipo
+    TipoDeAgente:
+      type: object
+      properties:
+        tipo:
+          type: string
+        nome:
+          type: string
+        etiqueta:
+          type: string
+        modelos_sugeridos:
+          type: array
+          items:
+            type: string
+        campos:
+          type: array
+          items:
+            $ref: '#/components/schemas/CampoCadastro'
+        guia:
+          type: array
+          items:
+            $ref: '#/components/schemas/PassoGuia'
+      required:
+      - campos
+      - etiqueta
+      - guia
+      - modelos_sugeridos
+      - nome
+      - tipo
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sessionid
