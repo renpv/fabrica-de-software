@@ -39,7 +39,7 @@ class ProjetoViewSet(
 ):
     """Projetos do dono logado. Criam-se por POST (busca o repositório e já prepara)."""
 
-    queryset = Projeto.objects.select_related("conexao").order_by("nome")
+    queryset = Projeto.objects.select_related("conexao", "predefinicao").order_by("nome")
     serializer_class = ProjetoSerializer
     authentication_classes = [SessaoAutenticacao]
     permission_classes = [IsAuthenticated, TemDono]
@@ -60,6 +60,7 @@ class ProjetoViewSet(
                 conexao=dados["conexao"],
                 repositorio_id_externo=dados["repositorio_id_externo"],
                 cliente=dados.get("cliente"),
+                predefinicao=dados.get("predefinicao"),
             )
         except servicos.ErroDeProjeto as erro:
             return Response({"detail": str(erro)}, status=400)

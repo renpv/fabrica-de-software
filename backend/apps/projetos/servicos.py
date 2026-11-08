@@ -11,6 +11,8 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from apps.agentes.provedores import REGISTRO as PROVEDORES
+from apps.fluxos.models import Predefinicao
+from apps.fluxos.servicos import contas_da_predefinicao
 from apps.plataformas import servicos as plataformas
 from apps.plataformas.adaptadores import obter_adaptador
 from apps.plataformas.adaptadores.base import ErroDePlataforma, ItemConferencia, Repositorio
@@ -71,7 +73,33 @@ def preparar_projeto(projeto: Projeto) -> list[ItemConferencia]:
     return _gravar(projeto, itens)
 
 
-def criar_projeto(dono, *, nome, conexao, repositorio_id_externo, cliente=None) -> Projeto:
+def validar_contas_do_projeto(projeto: Projeto, predefinicao: Predefinicao | None) -> list[str]:
+    """Erros (pt-BR) se a predefinição usa conta de outro cliente que não o do projeto."""
+    if predefinicao is None:
+        return []
+    erros = []
+    for conta in contas_da_predefinicao(predefinicao):
+        if conta.cliente_id is not None and conta.cliente_id != projeto.cliente_id:
+            erros.append(
+                f"A conta {conta.nome} é do cliente {conta.cliente.nome} "
+                "e não pode trabalhar neste projeto."
+            )
+    return erros
+
+
+def validar_projetos_da_predefinicao(predefinicao: Predefinicao) -> list[str]:
+    """Para o PATCH da predefinição: confere cada projeto que a usa. Registrado no `ready()`."""
+    erros = []
+    for projeto in predefinicao.projetos.select_related("cliente"):
+        erros += [
+            f"Projeto {projeto.nome}: {e}" for e in validar_contas_do_projeto(projeto, predefinicao)
+        ]
+    return erros
+
+
+def criar_projeto(
+    dono, *, nome, conexao, repositorio_id_externo, cliente=None, predefinicao=None
+) -> Projeto:
     """Busca o repositório na listagem da plataforma, grava o projeto e já o prepara.
 
     A listagem fica fora de transação (é chamada de rede). Se o `preparar` falhar depois,
@@ -81,6 +109,12 @@ def criar_projeto(dono, *, nome, conexao, repositorio_id_externo, cliente=None) 
     """
     if conexao.dono_id != dono.id or (cliente is not None and cliente.dono_id != dono.id):
         raise ErroDeProjeto("Conexão ou cliente não encontrado. Escolha um dos seus.")
+    if predefinicao is not None:
+        if predefinicao.dono_id != dono.id:
+            raise ErroDeProjeto("Predefinição não encontrada. Escolha uma das suas.")
+        erros = validar_contas_do_projeto(Projeto(dono=dono, cliente=cliente), predefinicao)
+        if erros:
+            raise ErroDeProjeto(" ".join(erros))
     repo = next(
         (
             r
@@ -110,6 +144,7 @@ def criar_projeto(dono, *, nome, conexao, repositorio_id_externo, cliente=None) 
                 repositorio_id_externo=repo.id_externo,
                 repositorio_url=repo.url_web,
                 cliente=cliente,
+                predefinicao=predefinicao,
             )
     except IntegrityError:
         raise ErroDeProjeto(MSG_DUPLICADO) from None
@@ -133,4 +168,6 @@ __all__ = [
     "excluir_projeto",
     "preparar_projeto",
     "url_webhook",
+    "validar_contas_do_projeto",
+    "validar_projetos_da_predefinicao",
 ]
