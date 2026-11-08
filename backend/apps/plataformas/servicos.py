@@ -6,20 +6,25 @@ do dono, um nonce e, na instalação, o id da conexão. Sais diferentes impedem 
 passo no outro.
 """
 
+import hashlib
+import hmac
+import json
 import re
 import secrets
 import uuid
+from dataclasses import dataclass
 from urllib.parse import urlencode, urlsplit
 
 from django.conf import settings
 from django.core import signing
 from django.core.cache import cache
+from django.db import DataError, IntegrityError, transaction
 
 from .adaptadores import github, obter_adaptador
 from .adaptadores.base import ErroDePlataforma, Repositorio, ResultadoTeste
 from .adaptadores.gitlab import MSG_TOKEN_INVALIDO, token_valido
 from .erros import MENSAGENS_DE_ERRO
-from .models import ConexaoPlataforma
+from .models import ConexaoPlataforma, EventoRecebido
 
 SAL_MANIFESTO = "plataformas.github.manifesto"
 SAL_INSTALACAO = "plataformas.github.instalacao"
@@ -245,7 +250,142 @@ def excluir_conexao(conexao: ConexaoPlataforma) -> None:
     conexao.delete()
 
 
+@dataclass(frozen=True)
+class RespostaWebhook:
+    status: int
+    detail: str
+
+
+MAX_CAMPO_EVENTO = 100
+_ASSINATURA_AUSENTE = RespostaWebhook(401, "Assinatura ausente.")
+_ASSINATURA_INVALIDA = RespostaWebhook(401, "Assinatura inválida.")
+_TOKEN_INVALIDO = RespostaWebhook(401, "Token inválido.")
+_CORPO_INVALIDO = RespostaWebhook(400, "Corpo inválido: envie um JSON.")
+_CABECALHOS_INVALIDOS = RespostaWebhook(400, "Cabeçalhos do evento ausentes ou inválidos.")
+
+
+def _iguais(a: str, b: str) -> bool:
+    """Comparação em tempo constante, em bytes (cabeçalho não ASCII não levanta erro)."""
+    return hmac.compare_digest(a.encode("utf-8"), b.encode("utf-8"))
+
+
+def _segredo(conexao: ConexaoPlataforma) -> str:
+    return str((conexao.credenciais or {}).get("webhook_secret") or "")
+
+
+def _id_da_instalacao(payload) -> str | None:
+    instalacao = payload.get("installation") if isinstance(payload, dict) else None
+    valor = instalacao.get("id") if isinstance(instalacao, dict) else None
+    if isinstance(valor, bool) or not isinstance(valor, (int, str)):
+        return None
+    texto = str(valor)
+    return texto if ID_INSTALACAO_VALIDO.fullmatch(texto) else None
+
+
+def _rejeitar_constante(nome: str):
+    raise ValueError(nome)  # NaN e Infinity não são JSON válido
+
+
+def _ler_json(corpo: bytes):
+    return json.loads(corpo, parse_constant=_rejeitar_constante)
+
+
+def _sem_nulo(valor):
+    """Troca U+0000 por U+FFFD em chaves e valores (o PostgreSQL não guarda NUL em jsonb)."""
+    if isinstance(valor, str):
+        return valor.replace("\x00", "\ufffd")
+    if isinstance(valor, list):
+        return [_sem_nulo(v) for v in valor]
+    if isinstance(valor, dict):
+        return {_sem_nulo(k): _sem_nulo(v) for k, v in valor.items()}
+    return valor
+
+
+def _guardar_evento(
+    conexao: ConexaoPlataforma, tipo_evento: str, entrega_id: str, payload
+) -> RespostaWebhook:
+    """Só chamar depois de verificar assinatura ou token. Reentrega responde 200 sem gravar."""
+    if not tipo_evento or not entrega_id:
+        return _CABECALHOS_INVALIDOS
+    if len(tipo_evento) > MAX_CAMPO_EVENTO or len(entrega_id) > MAX_CAMPO_EVENTO:
+        return _CABECALHOS_INVALIDOS
+    reentrega = RespostaWebhook(200, "Entrega já recebida.")
+    if EventoRecebido.objects.filter(conexao=conexao, entrega_id=entrega_id).exists():
+        return reentrega
+    try:
+        limpo = _sem_nulo(payload)
+        with transaction.atomic():
+            EventoRecebido.objects.create(
+                dono=conexao.dono,
+                conexao=conexao,
+                tipo_evento=tipo_evento,
+                entrega_id=entrega_id,
+                payload=limpo,
+            )
+    except IntegrityError:  # reentrega concorrente
+        return reentrega
+    except RecursionError, DataError:  # JSON profundo demais ou recusado pelo PostgreSQL
+        return _CORPO_INVALIDO
+    return RespostaWebhook(202, "Evento recebido.")
+
+
+def receber_webhook_github(
+    corpo: bytes, assinatura: str, tipo_evento: str, entrega_id: str
+) -> RespostaWebhook:
+    """Acha a conexão pelo installation.id, verifica o HMAC sobre o corpo cru e guarda."""
+    if not assinatura:
+        return _ASSINATURA_AUSENTE
+    try:
+        payload = _ler_json(corpo)
+    except ValueError, RecursionError:
+        return _CORPO_INVALIDO
+    instalacao = _id_da_instalacao(payload)
+    if instalacao is None:
+        return _CORPO_INVALIDO
+    candidatas = list(
+        ConexaoPlataforma.objects.filter(
+            tipo=ConexaoPlataforma.Tipo.GITHUB, config__installation_id=instalacao
+        )
+    )
+    if not candidatas:
+        if tipo_evento == "installation" and payload.get("action") == "created":
+            return RespostaWebhook(202, "Instalação ainda sem conexão; evento ignorado.")
+        return RespostaWebhook(404, "Instalação desconhecida.")
+    for conexao in candidatas:
+        segredo = _segredo(conexao)
+        if not segredo:
+            continue
+        esperada = "sha256=" + hmac.new(segredo.encode(), corpo, hashlib.sha256).hexdigest()
+        if _iguais(esperada, assinatura):
+            return _guardar_evento(conexao, tipo_evento, entrega_id, payload)
+    return _ASSINATURA_INVALIDA
+
+
+def receber_webhook_gitlab(
+    conexao_id: uuid.UUID, corpo: bytes, token: str, tipo_evento: str, entrega_id: str
+) -> RespostaWebhook:
+    """Confere o X-Gitlab-Token da conexão e guarda o evento."""
+    conexao = ConexaoPlataforma.objects.filter(
+        id=conexao_id, tipo=ConexaoPlataforma.Tipo.GITLAB
+    ).first()
+    if conexao is None:
+        return RespostaWebhook(404, "Conexão desconhecida.")
+    segredo = _segredo(conexao)
+    if not token or not segredo or not _iguais(segredo, token):
+        return _TOKEN_INVALIDO
+    try:
+        payload = _ler_json(corpo)
+    except ValueError, RecursionError:
+        return _CORPO_INVALIDO
+    if not isinstance(payload, dict):
+        return _CORPO_INVALIDO
+    return _guardar_evento(conexao, tipo_evento, entrega_id, payload)
+
+
 __all__ = [
+    "RespostaWebhook",
+    "receber_webhook_github",
+    "receber_webhook_gitlab",
     "ConexaoRecusada",
     "ErroDeFluxo",
     "ErroDePlataforma",
