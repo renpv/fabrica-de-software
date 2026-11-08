@@ -67,6 +67,16 @@ def test_banco_guarda_cifrado():
     assert RegistroComSegredo.objects.get(pk=obj.pk).credenciais == {"chave": "abc-texto-puro"}
 
 
+def test_repr_nao_vaza_antes_de_salvar():
+    obj = RegistroComSegredo(credenciais={"a": "abc"})
+    assert isinstance(obj.credenciais, ValorSecreto)
+    assert "abc" not in repr(obj.credenciais)
+    obj.credenciais = {"a": "xyz"}
+    assert "xyz" not in repr(obj.credenciais) and obj.credenciais["a"] == "xyz"
+    obj.credenciais = None
+    assert obj.credenciais is None
+
+
 @pytest.mark.django_db
 def test_repr_nao_vaza():
     RegistroComSegredo.objects.create(credenciais={"chave": "abc"})

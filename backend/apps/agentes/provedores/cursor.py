@@ -35,10 +35,15 @@ class ProvedorCursor:
     ]
 
     def testar(self, credenciais: dict[str, str], config: dict) -> ResultadoTeste:
+        chave = credenciais.get("api_key", "")
+        if not chave:
+            return ResultadoTeste(
+                ok=False, status="falha", mensagem="Cole a chave de API do Cursor para testar."
+            )
         try:
             resposta = httpx.get(
                 URL_ME,
-                headers={"Authorization": f"Bearer {credenciais.get('api_key', '')}"},
+                headers={"Authorization": f"Bearer {chave}"},
                 timeout=TIMEOUT_SEGUNDOS,
             )
         except httpx.TransportError:

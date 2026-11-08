@@ -105,3 +105,29 @@ def test_etiqueta_e_modelos_dos_provedores():
 def test_registro_tem_os_dois_tipos():
     assert set(REGISTRO) == {"cursor", "claude_local"}
     assert all(p.tipo == t for t, p in REGISTRO.items())
+
+
+@respx.mock
+@pytest.mark.parametrize("credenciais", [{}, {"api_key": ""}, {"api_key": "  \n"}])
+def test_cursor_sem_chave_nao_chama_a_api(credenciais):
+    rota = respx.get(URL_ME).respond(200, json={})
+    r = servicos.testar_dados("cursor", credenciais, {})
+    assert not r.ok and r.status == "falha"
+    assert r.mensagem == "Cole a chave de API do Cursor para testar."
+    assert rota.call_count == 0
+
+
+@respx.mock
+@pytest.mark.parametrize(
+    "resposta",
+    [
+        httpx.Response(200, content=b"<html>nao e json</html>"),
+        httpx.Response(200, json={}),
+        httpx.Response(200, json={"outro": 1}),
+        httpx.Response(200, json=["a", "b"]),
+    ],
+)
+def test_cursor_200_com_corpo_inesperado_nao_quebra(resposta):
+    respx.get(URL_ME).mock(return_value=resposta)
+    r = obter_provedor("cursor").testar({"api_key": "k"}, {})
+    assert r.ok and r.status == "ok" and r.mensagem == "Conectado como o Cursor."

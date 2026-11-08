@@ -22,7 +22,8 @@ def testar_conta(conta) -> ResultadoTeste:
     resultado = testar_dados(conta.tipo, conta.credenciais, conta.config)
     conta.status = resultado.status
     conta.ultimo_teste_em = timezone.now()
-    conta.ultimo_teste_mensagem = resultado.mensagem
+    limite = conta._meta.get_field("ultimo_teste_mensagem").max_length
+    conta.ultimo_teste_mensagem = resultado.mensagem[:limite]
     conta.save(
         update_fields=["status", "ultimo_teste_em", "ultimo_teste_mensagem", "atualizado_em"]
     )
