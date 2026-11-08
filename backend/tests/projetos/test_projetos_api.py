@@ -1,4 +1,5 @@
 from apps.donos.models import Cliente, Dono
+from apps.fluxos import servicos as servicos_fluxos
 from apps.plataformas.models import ConexaoPlataforma
 from apps.projetos.models import Projeto
 
@@ -31,10 +32,33 @@ def test_criar_projeto_ja_prepara(client, logado, conexao, adaptador_falso, clie
     assert "token" not in r.content.decode()
 
 
-def test_predefinicao_no_corpo_e_ignorada(client, logado, conexao, adaptador_falso):
+def test_criar_projeto_com_predefinicao(client, logado, conexao, adaptador_falso, conta_factory):
+    conta = conta_factory(dono=logado.dono)
+    pred = servicos_fluxos.criar_padrao(logado.dono, conta, conta)
+    r = _json(client, "post", BASE, _corpo(conexao, predefinicao=str(pred.id)))
+    assert r.status_code == 201, r.content
+    assert r.json()["predefinicao"] == str(pred.id)
+
+
+def test_criar_projeto_com_predefinicao_invalida_da_400(client, logado, conexao, adaptador_falso):
     r = _json(client, "post", BASE, _corpo(conexao, predefinicao="qualquer"))
-    assert r.status_code == 201
-    assert "predefinicao" not in r.json()
+    assert r.status_code == 400
+    assert not Projeto.objects.exists()
+
+
+def test_criar_projeto_recusa_conta_de_outro_cliente(
+    client, logado, conexao, adaptador_falso, conta_factory, cliente_do_dono
+):
+    outro = Cliente.objects.create(dono=logado.dono, nome="Outro")
+    conta = conta_factory(dono=logado.dono, cliente=outro)
+    pred = servicos_fluxos.criar_padrao(logado.dono, conta, conta)
+    r = _json(
+        client, "post", BASE,
+        _corpo(conexao, predefinicao=str(pred.id), cliente=str(cliente_do_dono.id)),
+    )  # fmt: skip
+    assert r.status_code == 400
+    assert "não pode trabalhar neste projeto" in r.json()["detail"]
+    assert not Projeto.objects.exists()
 
 
 def test_repositorio_inacessivel_da_400(client, logado, conexao, adaptador_falso):

@@ -1,13 +1,17 @@
+import copy
+
 from rest_framework import serializers
 
 from apps.donos.models import Cliente
+from apps.fluxos.models import Predefinicao
 from apps.plataformas.models import ConexaoPlataforma
 
+from . import servicos
 from .models import Projeto
 
 
 class ProjetoSerializer(serializers.ModelSerializer):
-    """Leitura do projeto. Só `nome`, `cliente` e `ativo` mudam por PATCH."""
+    """Leitura do projeto. Só `nome`, `cliente`, `predefinicao` e `ativo` mudam por PATCH."""
 
     conferencia = serializers.JSONField(source="ultima_conferencia", read_only=True)
     erro_ao_preparar = serializers.CharField(read_only=True)
@@ -16,8 +20,8 @@ class ProjetoSerializer(serializers.ModelSerializer):
         model = Projeto
         fields = [
             "id", "nome", "conexao", "repositorio_caminho", "repositorio_id_externo",
-            "repositorio_url", "cliente", "ativo", "conferencia", "ultima_conferencia_em",
-            "erro_ao_preparar",
+            "repositorio_url", "cliente", "predefinicao", "ativo", "conferencia",
+            "ultima_conferencia_em", "erro_ao_preparar",
         ]  # fmt: skip
         read_only_fields = [
             "id", "conexao", "repositorio_caminho", "repositorio_id_externo", "repositorio_url",
@@ -27,7 +31,19 @@ class ProjetoSerializer(serializers.ModelSerializer):
     def get_fields(self):
         campos = super().get_fields()
         _limitar_ao_dono(campos["cliente"], self.context.get("request"), Cliente)
+        _limitar_ao_dono(campos["predefinicao"], self.context.get("request"), Predefinicao)
         return campos
+
+    def validate(self, attrs):
+        if self.instance is not None and ("cliente" in attrs or "predefinicao" in attrs):
+            candidato = copy.copy(self.instance)
+            candidato.cliente = attrs.get("cliente", self.instance.cliente)
+            predefinicao = attrs.get("predefinicao", self.instance.predefinicao)
+            erros = servicos.validar_contas_do_projeto(candidato, predefinicao)
+            if erros:
+                campo = "cliente" if "predefinicao" not in attrs else "predefinicao"
+                raise serializers.ValidationError({campo: erros})
+        return attrs
 
 
 def _limitar_ao_dono(campo, request, modelo):
@@ -42,12 +58,16 @@ class CriarProjetoSerializer(serializers.Serializer):
     cliente = serializers.PrimaryKeyRelatedField(
         queryset=Cliente.objects.none(), required=False, allow_null=True
     )
+    predefinicao = serializers.PrimaryKeyRelatedField(
+        queryset=Predefinicao.objects.none(), required=False, allow_null=True
+    )
 
     def get_fields(self):
         campos = super().get_fields()
         request = self.context.get("request")
         _limitar_ao_dono(campos["conexao"], request, ConexaoPlataforma)
         _limitar_ao_dono(campos["cliente"], request, Cliente)
+        _limitar_ao_dono(campos["predefinicao"], request, Predefinicao)
         return campos
 
 

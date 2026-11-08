@@ -1,11 +1,12 @@
 from django.db import models
 
 from apps.donos.models import Cliente, PertenceADono
+from apps.fluxos.models import Predefinicao
 from apps.plataformas.models import ConexaoPlataforma
 
 
 class Projeto(PertenceADono):
-    """Um repositório que a central gerencia. A predefinição de agentes entra na Task 9."""
+    """Um repositório que a central gerencia, com a predefinição de fluxo que ele segue."""
 
     nome = models.CharField(max_length=120)
     # PROTECT: apagar a conexão não pode apagar os projetos em silêncio.
@@ -15,6 +16,10 @@ class Projeto(PertenceADono):
     repositorio_url = models.CharField(max_length=500)
     cliente = models.ForeignKey(
         Cliente, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    # PROTECT: apagar uma predefinição em uso não pode soltar os projetos em silêncio.
+    predefinicao = models.ForeignKey(
+        Predefinicao, null=True, blank=True, on_delete=models.PROTECT, related_name="projetos"
     )
     ativo = models.BooleanField(default=True)
     ultima_conferencia = models.JSONField(default=list, blank=True)

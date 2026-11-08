@@ -2,7 +2,7 @@
 # Cada task que cria um módulo acrescenta aqui o contrato dele (ver CLAUDE.md):
 #   cofre e donos      -> não importam nenhum outro módulo
 #   agentes, plataformas -> só importam cofre e donos
-#   fluxos             -> importa agentes
+#   fluxos             -> importa agentes (nunca saude, plataformas, projetos)
 #   projetos           -> importa plataformas, fluxos, agentes, donos e cofre (nunca saude)
 # Views e API só chamam servicos.py (a regra de negócio fica na camada de serviços).
 [importlinter]
@@ -19,6 +19,7 @@ forbidden_modules =
     apps.agentes
     apps.plataformas
     apps.projetos
+    apps.fluxos
 allow_indirect_imports = True
 
 [importlinter:contract:saude-isolado]
@@ -32,6 +33,7 @@ forbidden_modules =
     apps.agentes
     apps.plataformas
     apps.projetos
+    apps.fluxos
 allow_indirect_imports = True
 
 [importlinter:contract:cofre-isolado]
@@ -45,6 +47,7 @@ forbidden_modules =
     apps.agentes
     apps.plataformas
     apps.projetos
+    apps.fluxos
 allow_indirect_imports = True
 
 [importlinter:contract:agentes]
@@ -52,6 +55,18 @@ name = O módulo agentes só importa cofre e donos
 type = forbidden
 source_modules =
     apps.agentes
+forbidden_modules =
+    apps.saude
+    apps.plataformas
+    apps.projetos
+    apps.fluxos
+allow_indirect_imports = True
+
+[importlinter:contract:fluxos]
+name = O módulo fluxos só importa agentes, donos e cofre
+type = forbidden
+source_modules =
+    apps.fluxos
 forbidden_modules =
     apps.saude
     apps.plataformas
@@ -67,6 +82,7 @@ forbidden_modules =
     apps.saude
     apps.agentes
     apps.projetos
+    apps.fluxos
 allow_indirect_imports = True
 
 [importlinter:contract:projetos]

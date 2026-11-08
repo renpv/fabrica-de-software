@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     "apps.agentes",
     "apps.cofre",
     "apps.donos",
+    "apps.fluxos",
     "apps.plataformas",
     "apps.projetos",
     "apps.saude",
