@@ -28,6 +28,8 @@ class PredefinicaoSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({"metodo": metodo_erros})
             if erros:
                 raise serializers.ValidationError({"etapas": erros})
+            if "etapas" in attrs:
+                attrs["etapas"] = servicos.normalizar_etapas(attrs["etapas"])
         return attrs
 
 

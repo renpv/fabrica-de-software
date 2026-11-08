@@ -101,6 +101,7 @@ def validar_etapas(dono, etapas) -> list[str]:
         return ["As etapas precisam ser uma lista."]
     erros: list[str] = []
     vistas: set[str] = set()
+    informadas: list[str] = []
     for posicao, etapa in enumerate(etapas, start=1):
         if not isinstance(etapa, dict):
             erros.append(f"A etapa {posicao} precisa ser um objeto.")
@@ -114,6 +115,7 @@ def validar_etapas(dono, etapas) -> list[str]:
             erros.append(f"Etapa repetida: {chave}. Cada etapa só pode aparecer uma vez.")
             continue
         vistas.add(chave)
+        informadas.append(chave)
         erros += _validar_papel(dono, chave, etapa.get("papel"))
         gatilho = etapa.get("gatilho")
         if not isinstance(gatilho, str) or gatilho not in GATILHOS:
@@ -132,7 +134,30 @@ def validar_etapas(dono, etapas) -> list[str]:
             erros.append(
                 f"Etapa {chave}: temporizador_minutos precisa ser um número inteiro de 1 em diante."
             )
+    if "implementar" not in vistas:
+        erros.append("A etapa implementar é obrigatória.")
+    na_ordem = [c for c in ETAPAS if c in vistas]
+    if informadas != na_ordem:
+        erros.append(f"As etapas precisam seguir a ordem: {', '.join(ETAPAS)}.")
     return erros
+
+
+def normalizar_etapas(etapas: list) -> list[dict]:
+    """Reconstrói cada etapa só com os campos conhecidos. Chame depois de `validar_etapas`."""
+    limpas = []
+    for etapa in etapas:
+        papel = etapa["papel"]
+        novo_papel = {"tipo": papel["tipo"]}
+        if papel["tipo"] == "conta":
+            novo_papel["conta_id"] = str(uuid.UUID(papel["conta_id"]))
+            modelo = (papel.get("modelo") or "").strip()
+            if modelo:
+                novo_papel["modelo"] = modelo
+        nova = {"chave": etapa["chave"], "papel": novo_papel, "gatilho": etapa["gatilho"]}
+        if etapa["gatilho"] == "temporizador":
+            nova["temporizador_minutos"] = etapa["temporizador_minutos"]
+        limpas.append(nova)
+    return limpas
 
 
 def validar_predefinicao(dono, metodo, etapas) -> list[str]:
@@ -164,7 +189,12 @@ def contas_da_predefinicao(predefinicao: Predefinicao) -> list[ContaAgente]:
 def criar_predefinicao(dono, *, nome, descricao="", metodo="superpowers", etapas, **extra):
     _recusar_se(validar_predefinicao(dono, metodo, etapas))
     return Predefinicao.objects.create(
-        dono=dono, nome=nome, descricao=descricao, metodo=metodo, etapas=etapas, **extra
+        dono=dono,
+        nome=nome,
+        descricao=descricao,
+        metodo=metodo,
+        etapas=normalizar_etapas(etapas),
+        **extra,
     )
 
 
@@ -177,6 +207,14 @@ def atualizar_predefinicao(predefinicao: Predefinicao, dados: dict) -> Predefini
                 dados.get("metodo", predefinicao.metodo),
                 dados.get("etapas", predefinicao.etapas),
             )
+        )
+    if "etapas" in dados:
+        dados = {**dados, "etapas": normalizar_etapas(dados["etapas"])}
+    if contar_usos(predefinicao) and not _verificadores_de_uso:
+        # Falha fechada: sem verificador, os projetos que usam a predefinição não seriam conferidos.
+        raise ErroDePredefinicao(
+            "Não foi possível conferir os projetos que usam esta predefinição. "
+            "Tente de novo mais tarde ou fale com o administrador."
         )
     with transaction.atomic():
         for campo, valor in dados.items():
@@ -224,7 +262,7 @@ def criar_padrao(dono, executor: ContaAgente, revisor: ContaAgente) -> Predefini
         nome="Padrão",
         descricao="Publica as tasks, implementa, revisa, faz o merge e espera o ok para produção.",
         metodo="superpowers",
-        etapas=_etapas_do_padrao(executor, revisor),
+        etapas=normalizar_etapas(_etapas_do_padrao(executor, revisor)),
         merge_autonomo=True,
     )
 
@@ -235,7 +273,7 @@ def duplicar(predefinicao: Predefinicao, nome: str) -> Predefinicao:
         nome=nome,
         descricao=predefinicao.descricao,
         metodo=predefinicao.metodo,
-        etapas=copy.deepcopy(predefinicao.etapas),
+        etapas=normalizar_etapas(copy.deepcopy(predefinicao.etapas)),
         merge_autonomo=predefinicao.merge_autonomo,
     )
 
@@ -269,6 +307,7 @@ __all__ = [
     "criar_predefinicao",
     "duplicar",
     "excluir_predefinicao",
+    "normalizar_etapas",
     "registrar_verificador_de_uso",
     "rotulos",
     "validar_etapas",

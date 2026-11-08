@@ -41,7 +41,8 @@ class ProjetoSerializer(serializers.ModelSerializer):
             predefinicao = attrs.get("predefinicao", self.instance.predefinicao)
             erros = servicos.validar_contas_do_projeto(candidato, predefinicao)
             if erros:
-                raise serializers.ValidationError({"predefinicao": erros})
+                campo = "cliente" if "predefinicao" not in attrs else "predefinicao"
+                raise serializers.ValidationError({campo: erros})
         return attrs
 
 

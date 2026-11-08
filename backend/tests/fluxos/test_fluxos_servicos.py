@@ -269,3 +269,104 @@ def test_conta_do_cliente_x_vale_no_projeto_do_cliente_x(dono, conta_factory, cl
 
 def test_sem_predefinicao_nao_ha_erro(dono):
     assert projetos_servicos.validar_contas_do_projeto(Projeto(dono=dono), None) == []
+
+
+# normalização, ordem e obrigatoriedade
+
+
+def test_etapas_na_ordem_errada_dao_erro(dono, conta_factory):
+    etapas = list(reversed(_etapas(dono, conta_factory(dono=dono))))
+    erros = servicos.validar_etapas(dono, etapas)
+    assert (
+        "As etapas precisam seguir a ordem: publicar_tasks, implementar, revisar, merge, promover."
+        in erros
+    )
+
+
+def test_subconjunto_na_ordem_e_aceito(dono, conta_factory):
+    etapas = [e for e in _etapas(dono, conta_factory(dono=dono)) if e["chave"] != "promover"]
+    assert servicos.validar_etapas(dono, etapas) == []
+
+
+def test_implementar_e_obrigatoria(dono, conta_factory):
+    etapas = [e for e in _etapas(dono, conta_factory(dono=dono)) if e["chave"] != "implementar"]
+    assert "A etapa implementar é obrigatória." in servicos.validar_etapas(dono, etapas)
+    assert "A etapa implementar é obrigatória." in servicos.validar_etapas(dono, [])
+
+
+def test_normalizacao_descarta_campos_desconhecidos(dono, conta_factory):
+    conta = conta_factory(dono=dono)
+    etapas = _etapas(dono, conta)
+    etapas[0] = {**etapas[0], "extra": 1, "papel": {"tipo": "central", "conta_id": str(conta.id)}}
+    etapas[1]["papel"] = {
+        "tipo": "conta",
+        "conta_id": str(conta.id).upper(),
+        "modelo": "  m1  ",
+        "lixo": True,
+    }
+    etapas[2]["papel"]["modelo"] = "   "
+    etapas[3] = {**etapas[3], "temporizador_minutos": 7}
+    assert servicos.validar_etapas(dono, etapas) == []
+
+    p = servicos.criar_predefinicao(dono, nome="N", etapas=etapas)
+    p.refresh_from_db()
+    por = {e["chave"]: e for e in p.etapas}
+    assert por["publicar_tasks"] == {
+        "chave": "publicar_tasks",
+        "papel": {"tipo": "central"},
+        "gatilho": "anterior_concluida",
+    }
+    assert por["implementar"]["papel"] == {
+        "tipo": "conta",
+        "conta_id": str(conta.id),
+        "modelo": "m1",
+    }
+    assert "modelo" not in por["revisar"]["papel"]
+    assert "temporizador_minutos" not in por["merge"]
+
+
+def test_normalizacao_mantem_temporizador(dono, conta_factory):
+    etapas = _etapas(
+        dono,
+        conta_factory(dono=dono),
+        merge={"papel": {"tipo": "central"}, "gatilho": "temporizador", "temporizador_minutos": 3},
+    )
+    p = servicos.criar_predefinicao(dono, nome="N", etapas=etapas)
+    assert {e["chave"]: e for e in p.etapas}["merge"]["temporizador_minutos"] == 3
+
+
+def test_duplicar_normaliza(dono, conta_factory):
+    original = servicos.criar_padrao(dono, conta_factory(dono=dono), conta_factory(dono=dono))
+    original.etapas[0]["lixo"] = 1
+    copia = servicos.duplicar(original, "C")
+    assert "lixo" not in copia.etapas[0]
+
+
+def test_projetos_registra_o_verificador_na_inicializacao():
+    assert projetos_servicos.validar_projetos_da_predefinicao in servicos._verificadores_de_uso
+
+
+def test_sem_verificador_e_com_usos_o_patch_falha_sem_gravar(dono, conta_factory, monkeypatch):
+    pred = servicos.criar_padrao(dono, conta_factory(dono=dono), conta_factory(dono=dono))
+    Projeto.objects.create(
+        dono=dono,
+        nome="P",
+        conexao=_conexao(dono),
+        repositorio_caminho="a/b",
+        repositorio_id_externo="1",
+        repositorio_url="u",
+        predefinicao=pred,
+    )
+    monkeypatch.setattr(servicos, "_verificadores_de_uso", [])
+    with pytest.raises(servicos.ErroDePredefinicao):
+        servicos.atualizar_predefinicao(pred, {"nome": "Outro"})
+    pred.refresh_from_db()
+    assert pred.nome == "Padrão"
+
+
+def _conexao(dono):
+    from apps.plataformas.models import ConexaoPlataforma
+
+    return ConexaoPlataforma.objects.create(
+        dono=dono, nome="GL", tipo="gitlab", url_base="https://g.exemplo.com"
+    )

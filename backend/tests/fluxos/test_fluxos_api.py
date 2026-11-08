@@ -205,3 +205,29 @@ def test_projeto_com_predefinicao_de_outro_dono_da_400(client, logado, dono, con
     projeto = _projeto(dono, conexao, None)
     r = _json(client, "patch", f"/api/projetos/{projeto.id}/", {"predefinicao": str(alheia.id)})
     assert r.status_code == 400
+
+
+def test_api_nao_guarda_chaves_extras(client, logado, padrao):
+    etapas = [dict(e) for e in padrao.etapas]
+    etapas[0] = {**etapas[0], "extra": "x", "papel": {"tipo": "central", "conta_id": "lixo"}}
+    r = _json(client, "post", BASE, {"nome": "x", "etapas": etapas})
+    assert r.status_code == 201, r.content
+    assert "extra" not in r.json()["etapas"][0]
+    assert r.json()["etapas"][0]["papel"] == {"tipo": "central"}
+
+
+def test_api_ordem_errada_da_400(client, logado, padrao):
+    r = _json(client, "post", BASE, {"nome": "x", "etapas": list(reversed(padrao.etapas))})
+    assert r.status_code == 400
+    assert "ordem" in str(r.json())
+
+
+def test_projeto_patch_so_de_cliente_reporta_em_cliente(
+    client, logado, dono, conta_factory, conexao, cliente_x, cliente_y
+):
+    da_x = conta_factory(dono=dono, cliente=cliente_x)
+    pred = servicos.criar_padrao(dono, da_x, da_x)
+    projeto = _projeto(dono, conexao, pred, cliente=cliente_x)
+    r = _json(client, "patch", f"/api/projetos/{projeto.id}/", {"cliente": str(cliente_y.id)})
+    assert r.status_code == 400
+    assert "cliente" in r.json() and "predefinicao" not in r.json()
