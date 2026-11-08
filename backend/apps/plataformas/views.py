@@ -1,5 +1,6 @@
 from dataclasses import asdict
 
+from django.db.models import ProtectedError
 from django.http import HttpResponseRedirect
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import exceptions, mixins, viewsets
@@ -155,6 +156,18 @@ class ConexaoPlataformaViewSet(
     serializer_class = ConexaoPlataformaSerializer
     authentication_classes = [SessaoAutenticacao]
     permission_classes = [IsAuthenticated, TemDono]
+
+    def destroy(self, request, *args, **kwargs):
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            return Response(
+                {
+                    "detail": "Esta conexão ainda tem projetos. "
+                    "Exclua os projetos dela antes de excluir a conexão."
+                },
+                status=409,
+            )
 
     def perform_destroy(self, instance):
         servicos.excluir_conexao(instance)
