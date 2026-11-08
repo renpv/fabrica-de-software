@@ -1,7 +1,7 @@
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from drf_spectacular.utils import extend_schema
-from rest_framework import exceptions, serializers, status
+from rest_framework import exceptions, serializers, status, viewsets
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -9,7 +9,10 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from . import servicos
+from .mixins import EscopoDoDonoMixin
+from .models import Cliente
 from .permissoes import TemDono
+from .serializers import ClienteSerializer
 from .throttles import LoginPorUsuarioThrottle
 
 MENSAGEM_CSRF = "Sessão expirada ou formulário inválido. Recarregue a página e tente de novo."
@@ -87,3 +90,18 @@ class SessaoView(APIView):
     def delete(self, request):
         servicos.encerrar(request)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ClienteViewSet(EscopoDoDonoMixin, viewsets.ModelViewSet):
+    """Clientes do dono logado."""
+
+    queryset = Cliente.objects.order_by("nome")
+    serializer_class = ClienteSerializer
+    authentication_classes = [SessaoAutenticacao]
+    permission_classes = [IsAuthenticated, TemDono]
+
+    def perform_update(self, serializer):
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        servicos.excluir_cliente(instance)

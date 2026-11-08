@@ -5,7 +5,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
-from .models import Dono, Membro
+from .models import Cliente, Dono, Membro
 
 
 def dono_do_usuario(usuario) -> Dono | None:
@@ -46,3 +46,21 @@ def criar_dono(nome: str, usuario: str, email: str, senha: str) -> Membro:
 def encerrar(request) -> None:
     """Encerra a sessão do usuário."""
     logout(request)
+
+
+def criar_cliente(dono: Dono, dados: dict) -> Cliente:
+    """Cria um cliente do dono."""
+    return Cliente.objects.create(dono=dono, **dados)
+
+
+def atualizar_cliente(cliente: Cliente, dados: dict) -> Cliente:
+    """Atualiza os campos informados do cliente."""
+    for campo, valor in dados.items():
+        setattr(cliente, campo, valor)
+    cliente.save()
+    return cliente
+
+
+def excluir_cliente(cliente: Cliente) -> None:
+    """Exclui o cliente (as contas ligadas a ele ficam sem cliente)."""
+    cliente.delete()
