@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: fabrica
       POSTGRES_DB: fabrica
     ports:
-      - "5434:5432"
+      - "127.0.0.1:5434:5432"
     volumes:
       - fabrica_pgdata:/var/lib/postgresql
     healthcheck:

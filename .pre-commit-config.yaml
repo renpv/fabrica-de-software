@@ -1,7 +1,4 @@
-# Base comum de hooks do git para todos os projetos (framework pre-commit).
-# Copie para a raiz do projeto como .pre-commit-config.yaml e acrescente os
-# hooks da linguagem e os testes nos blocos marcados abaixo.
-# Atualizar as versões: pre-commit autoupdate
+# Hooks do git do projeto (framework pre-commit). Atualizar as versões: pre-commit autoupdate
 default_install_hook_types: [pre-commit, pre-push]
 default_stages: [pre-commit]
 
@@ -25,7 +22,7 @@ repos:
     hooks:
       - id: gitleaks
 
-  # --- Linguagem do projeto (exemplo para Python; troque conforme o projeto) ---
+  # --- Linguagem do projeto (Python) ---
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.17.4
     hooks:
@@ -41,5 +38,4 @@ repos:
         stages: [pre-push]
         language: system
         pass_filenames: false
-        # Troque pelo comando de testes do projeto (ex.: pytest -q -x, npm test).
         entry: automacao/verificar.sh
