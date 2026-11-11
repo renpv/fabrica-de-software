@@ -31,6 +31,15 @@ passo "back-end: pytest"
 uv run pytest -q
 cd "$raiz"
 
-# --- front-end: os passos (lint, tipos e testes) entram na Task 11 ---
+cd frontend
+passo "front-end: npm ci"
+npm ci
+passo "front-end: lint"
+npm run lint
+passo "front-end: tipos (tsc -b)"
+npx tsc -b
+passo "front-end: vitest"
+npx vitest run
+cd "$raiz"
 
 passo "Verificação concluída sem erros."

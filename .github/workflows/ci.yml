@@ -36,5 +36,8 @@ jobs:
       - uses: astral-sh/setup-uv@v10.3.3
         with:
           version: "0.13.7"
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version-file: frontend/.nvmrc
       - name: Verificação completa
         run: automacao/verificar.sh
