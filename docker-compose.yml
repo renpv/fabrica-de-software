@@ -35,7 +35,8 @@ services:
         - CMD
         - python
         - -c
-        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/saude/', timeout=3).status == 200 else 1)"
+        # Manda o Host da primeira entrada de DJANGO_ALLOWED_HOSTS, para não depender de "localhost" estar na lista.
+        - "import os,sys,urllib.request; h=os.environ['DJANGO_ALLOWED_HOSTS'].split(',')[0].strip().lstrip('.') or 'localhost'; h='localhost' if h=='*' else h; r=urllib.request.Request('http://127.0.0.1:8000/api/saude/', headers={'Host': h}); sys.exit(0 if urllib.request.urlopen(r, timeout=3).status == 200 else 1)"
       interval: 10s
       timeout: 5s
       retries: 6

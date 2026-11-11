@@ -26,7 +26,7 @@ POSTGRES_PASSWORD=$senha_db
 POSTGRES_DB=fabrica
 DJANGO_SECRET_KEY=$segredo
 DJANGO_DEBUG=false
-DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1
+DJANGO_ALLOWED_HOSTS=fumaca.local
 DJANGO_NUM_PROXIES=1
 FABRICA_URL_PUBLICA=http://localhost:$porta
 FABRICA_CHAVES_COFRE=$fernet
@@ -40,7 +40,7 @@ echo "==> Subindo o compose (projeto $projeto, porta $porta)"
 
 echo "==> Esperando GET /api/saude/ (até 60 s)"
 for _ in $(seq 1 30); do
-  if [ "$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$porta/api/saude/" || true)" = "200" ]; then
+  if [ "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: fumaca.local' "http://localhost:$porta/api/saude/" || true)" = "200" ]; then
     echo "saúde ok"
     exit 0
   fi
