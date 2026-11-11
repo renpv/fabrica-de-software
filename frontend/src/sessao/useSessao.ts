@@ -7,6 +7,8 @@ export type Sessao = { usuario: string; dono: { id: string; nome: string } };
 const CHAVE = ["sessao"] as const;
 const MENSAGEM_PADRAO = "Não foi possível falar com o servidor. Verifique a conexão e tente de novo.";
 
+const MENSAGEM_SAIR = "Não foi possível sair. Recarregue a página e tente de novo.";
+
 export class ErroDeSessao extends Error {}
 
 async function buscarSessao(): Promise<Sessao | null> {
@@ -33,9 +35,15 @@ export function useSessao() {
 
   const sairMutacao = useMutation({
     mutationFn: async () => {
-      await api.DELETE("/api/sessao/");
+      const { error, response } = await api.DELETE("/api/sessao/");
+      if (!response.ok) throw new ErroDeSessao(mensagemDeErro(error, MENSAGEM_SAIR));
     },
-    onSettled: () => queryClient.setQueryData(CHAVE, null),
+    onSuccess: () => {
+      // Nada do usuário anterior pode sobrar no cache.
+      // (`clear()` desligaria a consulta da sessão, que a tela ainda observa.)
+      queryClient.removeQueries({ predicate: (consulta) => consulta.queryKey[0] !== CHAVE[0] });
+      queryClient.setQueryData(CHAVE, null);
+    },
   });
 
   return {
@@ -45,6 +53,7 @@ export function useSessao() {
     erroDeLogin: entrarMutacao.error ? entrarMutacao.error.message : null,
     entrando: entrarMutacao.isPending,
     entrar: (usuario: string, senha: string) => entrarMutacao.mutateAsync({ usuario, senha }).catch(() => undefined),
-    sair: () => sairMutacao.mutateAsync(),
+    erroAoSair: sairMutacao.error ? sairMutacao.error.message : null,
+    sair: () => sairMutacao.mutateAsync().catch(() => undefined),
   };
 }

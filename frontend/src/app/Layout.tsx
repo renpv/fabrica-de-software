@@ -1,4 +1,4 @@
-import { AppShell, Burger, Button, Group, NavLink, Text } from "@mantine/core";
+import { Alert, AppShell, Burger, Button, Group, NavLink, Text } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { NavLink as LinkDaRota, Outlet } from "react-router";
 import { useSessao } from "../sessao/useSessao";
@@ -10,7 +10,7 @@ const itens = [
 ];
 
 export function Layout() {
-  const { sessao, sair } = useSessao();
+  const { sessao, sair, erroAoSair } = useSessao();
   const [aberto, { toggle, close }] = useDisclosure(false);
 
   return (
@@ -39,6 +39,11 @@ export function Layout() {
         ))}
       </AppShell.Navbar>
       <AppShell.Main>
+        {erroAoSair && (
+          <Alert color="red" role="alert" mb="md">
+            {erroAoSair}
+          </Alert>
+        )}
         <Outlet />
       </AppShell.Main>
     </AppShell>
