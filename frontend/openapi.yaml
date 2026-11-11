@@ -1272,6 +1272,10 @@ components:
         revisor:
           type: string
           format: uuid
+        nome:
+          type: string
+          default: Padrão
+          maxLength: 120
       required:
       - executor
       - revisor

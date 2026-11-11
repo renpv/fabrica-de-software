@@ -74,7 +74,10 @@ class PredefinicaoViewSet(EscopoDoDonoMixin, viewsets.ModelViewSet):
         pedido.is_valid(raise_exception=True)
         try:
             criada = servicos.criar_padrao(
-                request.dono, pedido.validated_data["executor"], pedido.validated_data["revisor"]
+                request.dono,
+                pedido.validated_data["executor"],
+                pedido.validated_data["revisor"],
+                pedido.validated_data["nome"],
             )
         except servicos.ErroDePredefinicao as erro:
             return _recusa(erro)

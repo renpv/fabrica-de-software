@@ -253,13 +253,15 @@ def _etapas_do_padrao(executor: ContaAgente, revisor: ContaAgente) -> list[dict]
     ]
 
 
-def criar_padrao(dono, executor: ContaAgente, revisor: ContaAgente) -> Predefinicao:
+def criar_padrao(
+    dono, executor: ContaAgente, revisor: ContaAgente, nome: str = "Padrão"
+) -> Predefinicao:
     """O «Padrão» da spec (4.3): uma conta implementa e outra revisa."""
     _conta_do_dono(dono, executor)
     _conta_do_dono(dono, revisor)
     return Predefinicao.objects.create(
         dono=dono,
-        nome="Padrão",
+        nome=nome,
         descricao="Publica as tasks, implementa, revisa, faz o merge e espera o ok para produção.",
         metodo="superpowers",
         etapas=normalizar_etapas(_etapas_do_padrao(executor, revisor)),
