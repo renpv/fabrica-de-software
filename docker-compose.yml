@@ -50,6 +50,7 @@ services:
         condition: service_healthy
     environment:
       FABRICA_SITE_CADDY: ${FABRICA_SITE_CADDY:-:80}
+      FABRICA_EXPOR_ADMIN: ${FABRICA_EXPOR_ADMIN:-false}
     ports:
       - "${FABRICA_PORTA_HTTP:-80}:80"
       - "${FABRICA_PORTA_HTTPS:-443}:443"

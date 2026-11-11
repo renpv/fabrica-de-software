@@ -50,7 +50,7 @@ O `docker-compose.yml` sobe a central como ela roda na VPS, com três serviços:
 - `backend`: Django com gunicorn (usuário sem privilégios). Na entrada roda `migrate`, serve `/static/` com WhiteNoise e tem healthcheck em `/api/saude/`. Não publica porta.
 - `caddy`: serve o `dist` do front-end, encaminha `/api`, `/admin` e `/static` para o back-end e entrega `/api/webhooks/*` sem cache (`Caddyfile`). É o único que publica portas (80 e 443); os volumes `caddy_data` e `caddy_config` guardam os certificados.
 
-Variáveis obrigatórias no `.env` (modelo em `.env.example`): `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_HOSTS`, `FABRICA_URL_PUBLICA` e `FABRICA_CHAVES_COFRE`. Opcionais: `FABRICA_SITE_CADDY` (`:80` ou o domínio, para HTTPS automático), `FABRICA_PORTA_HTTP`, `FABRICA_PORTA_HTTPS` e `DJANGO_NUM_PROXIES` (1 atrás do Caddy). A `DATABASE_URL` é montada pelo compose. Nenhum segredo entra nas imagens.
+Variáveis obrigatórias no `.env` (modelo em `.env.example`): `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_HOSTS`, `FABRICA_URL_PUBLICA` e `FABRICA_CHAVES_COFRE`. Opcionais: `FABRICA_SITE_CADDY` (`:80` ou o domínio, para HTTPS automático), `FABRICA_PORTA_HTTP`, `FABRICA_PORTA_HTTPS` e `DJANGO_NUM_PROXIES` (1 atrás do Caddy) e `FABRICA_EXPOR_ADMIN` (`false` por padrão). A `DATABASE_URL` é montada pelo compose. Nenhum segredo entra nas imagens.
 
 ```bash
 cp .env.example .env     # preencha os valores
@@ -58,7 +58,20 @@ docker compose up -d --build
 docker compose ps
 ```
 
-Teste de fumaça (sobe o compose com um `.env` descartável na porta 18080, espera `GET /api/saude/` dar 200 pelo Caddy e derruba tudo): `automacao/fumaca.sh`. Ele não roda no CI nem no pre-push, por causa do tempo de build.
+### HTTPS e URL pública
+
+`FABRICA_URL_PUBLICA` é a origem pública da central (esquema e host, sem caminho). O back-end deriva dela o `CSRF_TRUSTED_ORIGINS`; quando ela é `https`, também confia no `X-Forwarded-Proto` do proxy (o Caddy o envia e descarta o valor do cliente) e marca os cookies de sessão e CSRF como `Secure`. Com `http://localhost`, nada disso muda.
+
+Aceite manual com URL pública (GitHub e GitLab precisam entregar webhooks, e o GitLab recusa `localhost`):
+1. Aponte um domínio (ou um túnel HTTPS) para a máquina e ponha no `.env`: `FABRICA_URL_PUBLICA=https://fabrica.exemplo.com`, `DJANGO_ALLOWED_HOSTS=fabrica.exemplo.com`, `FABRICA_SITE_CADDY=fabrica.exemplo.com` e `DJANGO_NUM_PROXIES=1`. Com túnel na frente do Caddy em `:80`, deixe `FABRICA_SITE_CADDY=:80`.
+2. `docker compose up -d --build` e abra a URL pública. Entre, conecte o GitHub e o GitLab e siga o roteiro do aceite.
+3. Com o front em `npm run dev` (porta 5173), o retorno do GitHub cai na porta do Django (404). Para evitar, ponha `FABRICA_URL_PUBLICA` com a origem do front (`http://localhost:5173`, ou o túnel que aponta para a 5173) e inclua esse host em `DJANGO_ALLOWED_HOSTS`.
+
+### Admin do Django
+
+O `/admin` não passa pelo Caddy por padrão. O Caddy não limita tentativas de login (o limite do app vale só para `/api/sessao/`), então ligue `FABRICA_EXPOR_ADMIN=true` no `.env` apenas por um tempo, e volte para `false` depois (`docker compose up -d`).
+
+Teste de fumaça (sobe o compose com um `.env` descartável na porta 18080, espera `GET /api/saude/` dar 200 pelo Caddy, confere que `/admin` não está exposto e derruba tudo): `automacao/fumaca.sh`. Ele não roda no CI nem no pre-push, por causa do tempo de build.
 
 O deploy na VPS fica fora do Plano 1 e só acontece com o ok explícito do responsável.
 

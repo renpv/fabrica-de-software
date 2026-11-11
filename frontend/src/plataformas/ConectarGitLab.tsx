@@ -1,6 +1,6 @@
 import { Alert, Anchor, Button, Group, List, Modal, PasswordInput, Stack, TextInput } from "@mantine/core";
 import { useState } from "react";
-import { ErroDeApi } from "../api/chamar";
+import { camposDoErro } from "../api/campos";
 import { useCriarGitLab } from "./api";
 
 export function ConectarGitLab({ onFechar }: { onFechar: () => void }) {
@@ -10,7 +10,7 @@ export function ConectarGitLab({ onFechar }: { onFechar: () => void }) {
   const criar = useCriarGitLab();
 
   const erro = criar.error;
-  const campos = erro instanceof ErroDeApi ? erro.campos : {};
+  const campos = camposDoErro(erro);
   const doCampo = (chave: string) => campos[chave]?.join(" ");
   const semCampo = Object.entries(campos)
     .filter(([c]) => !["nome", "url_base", "token"].includes(c))

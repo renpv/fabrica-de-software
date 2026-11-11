@@ -1,10 +1,11 @@
 import { MantineProvider } from "@mantine/core";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router";
+import { criarQueryClient } from "../api/queryClient";
 import { tema } from "../tema/tema";
 import { RotasApp } from "./rotas";
 
-const queryClient = new QueryClient();
+const queryClient = criarQueryClient();
 
 export function App() {
   return (

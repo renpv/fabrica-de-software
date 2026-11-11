@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { limparDadosDoUsuario } from "./cache";
 import { mensagemDeErro } from "./cliente";
 
 export const MENSAGEM_REDE = "Não foi possível falar com o servidor. Verifique a conexão e tente de novo.";
@@ -10,6 +11,14 @@ export class ErroDeApi extends Error {
     super(mensagem);
     this.campos = campos;
   }
+}
+
+/** Falha de rede: nem chegou resposta do servidor. */
+export class ErroDeRede extends ErroDeApi {}
+
+/** Só falha de rede merece nova tentativa (uma só); resposta do servidor aparece na hora. */
+export function deveTentarDeNovo(falhas: number, erro: unknown): boolean {
+  return falhas < 1 && (erro instanceof ErroDeRede || erro instanceof TypeError);
 }
 
 function errosPorCampo(erro: unknown): Record<string, string[]> {
@@ -33,12 +42,13 @@ export async function chamar<T>(
   try {
     resposta = await fazer();
   } catch {
-    throw new ErroDeApi(MENSAGEM_REDE);
+    throw new ErroDeRede(MENSAGEM_REDE);
   }
   const { data, error, response } = resposta;
   if (response.ok) return data as T;
   if (response.status === 401 || response.status === 403) {
-    // Sessão expirada: a rota protegida leva para /entrar.
+    // Sessão expirada: a rota protegida leva para /entrar, e nada do dono anterior fica no cache.
+    limparDadosDoUsuario(queryClient);
     queryClient.setQueryData(["sessao"], null);
     throw new ErroDeApi("Sua sessão expirou. Entre de novo.");
   }
@@ -53,7 +63,8 @@ export async function chamar<T>(
     throw new ErroDeApi("Muitas tentativas seguidas. Espere um minuto e tente de novo.");
   }
   if (response.status >= 500) {
-    throw new ErroDeApi("O servidor teve um problema. Tente de novo em instantes.");
+    // O 502 das integrações traz um `detail` que diz o que fazer; o 500 do Django vem em HTML, sem ele.
+    throw new ErroDeApi(mensagemDeErro(error, "O servidor teve um problema. Tente de novo em instantes."));
   }
   throw new ErroDeApi(mensagemDeErro(error, MENSAGEM_REDE));
 }

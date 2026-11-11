@@ -123,6 +123,44 @@ describe("Predefinições", () => {
     await waitFor(() => expect(corpo).toEqual({ executor: CONTA_CURSOR, revisor: CONTA_CLAUDE }));
   });
 
+  it("criar a partir do padrão mostra o erro por campo do servidor", async () => {
+    preparar();
+    servidor.use(
+      http.post("/api/predefinicoes/padrao/", () =>
+        HttpResponse.json({ executor: ["Escolha uma conta de implementação."] }, { status: 400 }),
+      ),
+    );
+    const usuario = userEvent.setup();
+    renderizarApp("/predefinicoes");
+
+    await usuario.click(await screen.findByRole("button", { name: "Criar a partir do Padrão" }));
+    const dialogo = await screen.findByRole("dialog");
+    await usuario.selectOptions(within(dialogo).getByLabelText("Executor"), "Cursor da Ana");
+    await usuario.selectOptions(within(dialogo).getByLabelText("Revisor"), "Claude da Ana");
+    await usuario.click(within(dialogo).getByRole("button", { name: "Criar" }));
+
+    expect(await within(dialogo).findByRole("alert")).toHaveTextContent(
+      "Executor: Escolha uma conta de implementação.",
+    );
+  });
+
+  it("duplicar mostra o erro por campo do servidor", async () => {
+    preparar();
+    servidor.use(
+      http.post("/api/predefinicoes/p1/duplicar/", () =>
+        HttpResponse.json({ nome: ["Já existe uma predefinição com este nome."] }, { status: 400 }),
+      ),
+    );
+    const usuario = userEvent.setup();
+    renderizarApp("/predefinicoes");
+    const cartao = (await screen.findByText("Padrão")).closest("[data-predefinicao]") as HTMLElement;
+    await usuario.click(within(cartao).getByRole("button", { name: "Duplicar" }));
+    const dialogo = await screen.findByRole("dialog");
+    await usuario.click(within(dialogo).getByRole("button", { name: "Duplicar" }));
+
+    expect(await within(dialogo).findByText(/Já existe uma predefinição com este nome\./)).toBeInTheDocument();
+  });
+
   it("promover só oferece humano", async () => {
     preparar();
     const usuario = userEvent.setup();

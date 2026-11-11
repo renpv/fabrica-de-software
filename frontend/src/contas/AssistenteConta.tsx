@@ -13,10 +13,10 @@ import {
   TextInput,
 } from "@mantine/core";
 import { useState } from "react";
+import { camposDoErro, mensagemComCampos } from "../api/campos";
 import {
   type Cliente,
   type Conta,
-  ErroDeApi,
   type ResultadoTeste,
   type TipoDeAgente,
   useSalvarConta,
@@ -97,11 +97,14 @@ export function AssistenteConta({ tipos, clientes, conta, onFechar }: Props) {
     }
   }
 
-  const campos = erroSalvar instanceof ErroDeApi ? erroSalvar.campos : {};
-  const doCampo = (chave: string) => campos[chave]?.join(" ");
-  const errosSemCampo = Object.entries(campos)
-    .filter(([c]) => !["nome", "cliente", "limite_simultaneo"].includes(c))
-    .flatMap(([, v]) => v);
+  const doCampo = (chave: string) => camposDoErro(erroSalvar)[chave]?.join(" ");
+  // No passo 3 os erros de campo do passo 2 aparecem com o nome do campo, para dizer onde corrigir.
+  const rotulos: Record<string, string> = {
+    nome: "Nome",
+    cliente: "Cliente",
+    limite_simultaneo: "Limite simultâneo",
+    ...Object.fromEntries((tipo?.campos ?? []).map((c) => [c.chave, c.rotulo])),
+  };
 
   return (
     <Modal opened onClose={onFechar} title={edicao ? "Editar conta" : "Nova conta"} size="lg" centered>
@@ -207,11 +210,7 @@ export function AssistenteConta({ tipos, clientes, conta, onFechar }: Props) {
           <Text fw={500}>Passo 3 de 3: teste a conexão</Text>
           {erroTeste && (
             <Alert color="red" role="alert">
-              {erroTeste.message}
-              {erroTeste instanceof ErroDeApi &&
-                Object.values(erroTeste.campos)
-                  .flat()
-                  .map((m) => ` ${m}`)}
+              {mensagemComCampos(erroTeste, { rotulos })}
             </Alert>
           )}
           {resultado && (
@@ -222,8 +221,7 @@ export function AssistenteConta({ tipos, clientes, conta, onFechar }: Props) {
           )}
           {erroSalvar && (
             <Alert color="red" role="alert">
-              {erroSalvar.message}
-              {errosSemCampo.map((m) => ` ${m}`)}
+              {mensagemComCampos(erroSalvar, { rotulos })}
             </Alert>
           )}
           <Group justify="space-between">

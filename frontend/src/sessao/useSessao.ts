@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { limparDadosDoUsuario } from "../api/cache";
+import { MENSAGEM_REDE } from "../api/chamar";
 import { api, mensagemDeErro } from "../api/cliente";
 
 // O openapi.yaml não descreve o corpo da sessão, então o tipo é escrito à mão.
 export type Sessao = { usuario: string; dono: { id: string; nome: string } };
 
 const CHAVE = ["sessao"] as const;
-const MENSAGEM_PADRAO = "Não foi possível falar com o servidor. Verifique a conexão e tente de novo.";
+const MENSAGEM_PADRAO = MENSAGEM_REDE;
 
 const MENSAGEM_SAIR = "Não foi possível sair. Recarregue a página e tente de novo.";
 
@@ -30,18 +32,35 @@ export function useSessao() {
       if (!response.ok) throw new ErroDeSessao(mensagemDeErro(error, MENSAGEM_PADRAO));
       return data as unknown as Sessao;
     },
-    onSuccess: (sessao) => queryClient.setQueryData(CHAVE, sessao),
+    onSuccess: (sessao) => {
+      // Um login novo nunca herda o cache de quem estava antes.
+      limparDadosDoUsuario(queryClient);
+      queryClient.setQueryData(CHAVE, sessao);
+    },
   });
 
   const sairMutacao = useMutation({
     mutationFn: async () => {
       const { error, response } = await api.DELETE("/api/sessao/");
+      // 401: já estava fora; a rota protegida leva a /entrar.
+      if (response.status === 401) return;
+      // 403 também é CSRF recusado, com a sessão do servidor viva: só conta como "fora" se a
+      // reconsulta confirmar que não há sessão. Qualquer outro resultado mantém o estado e mostra o erro.
+      if (response.status === 403) {
+        let confirmada = false;
+        try {
+          const { response: reconsulta } = await api.GET("/api/sessao/");
+          confirmada = reconsulta.status === 401 || reconsulta.status === 403;
+        } catch {
+          // falha de rede: não dá para confirmar
+        }
+        if (confirmada) return;
+        throw new ErroDeSessao(MENSAGEM_SAIR);
+      }
       if (!response.ok) throw new ErroDeSessao(mensagemDeErro(error, MENSAGEM_SAIR));
     },
     onSuccess: () => {
-      // Nada do usuário anterior pode sobrar no cache.
-      // (`clear()` desligaria a consulta da sessão, que a tela ainda observa.)
-      queryClient.removeQueries({ predicate: (consulta) => consulta.queryKey[0] !== CHAVE[0] });
+      limparDadosDoUsuario(queryClient);
       queryClient.setQueryData(CHAVE, null);
     },
   });

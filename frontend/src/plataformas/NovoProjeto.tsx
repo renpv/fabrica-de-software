@@ -1,5 +1,6 @@
 import { Alert, Button, Group, Modal, NativeSelect, Stack, Text, TextInput } from "@mantine/core";
 import { useState } from "react";
+import { camposDoErro } from "../api/campos";
 import { useClientes } from "../contas/api";
 import { Conferencia } from "./Conferencia";
 import { type Conexao, type Projeto, itensDoProjeto, useCriarProjeto, usePredefinicoes, useRepositorios } from "./api";
@@ -43,7 +44,7 @@ export function NovoProjeto({ conexoes, onFechar }: Props) {
     );
   }
 
-  const erroDeCampos = (criar.error as { campos?: Record<string, string[]> } | null)?.campos ?? {};
+  const erroDeCampos = camposDoErro(criar.error);
   const doCampo = (chave: string) => erroDeCampos[chave]?.join(" ");
 
   if (criado) {

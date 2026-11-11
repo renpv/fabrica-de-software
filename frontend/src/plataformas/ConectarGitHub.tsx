@@ -1,4 +1,5 @@
 import { Button, Group, Modal, Stack, Text, TextInput } from "@mantine/core";
+import { camposDoErro } from "../api/campos";
 import { useEffect, useRef, useState } from "react";
 import { useManifesto } from "./api";
 
@@ -16,7 +17,7 @@ export function ConectarGitHub({ onFechar }: { onFechar: () => void }) {
     if (resposta) formulario.current?.requestSubmit();
   }, [resposta]);
 
-  const campos = (manifesto.error as { campos?: Record<string, string[]> } | null)?.campos ?? {};
+  const campos = camposDoErro(manifesto.error);
 
   return (
     <Modal opened onClose={onFechar} title="Conectar GitHub" centered>

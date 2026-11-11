@@ -42,11 +42,24 @@ echo "==> Esperando GET /api/saude/ (até 60 s)"
 for _ in $(seq 1 30); do
   if [ "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: fumaca.local' "http://localhost:$porta/api/saude/" || true)" = "200" ]; then
     echo "saúde ok"
-    exit 0
+    saudavel=1
+    break
   fi
   sleep 2
 done
 
-echo "A saúde não respondeu 200 em 60 s. Logs do compose:" >&2
-"${compose[@]}" logs --no-color >&2 || true
-exit 1
+if [ "${saudavel:-0}" != "1" ]; then
+  echo "A saúde não respondeu 200 em 60 s. Logs do compose:" >&2
+  "${compose[@]}" logs --no-color >&2 || true
+  exit 1
+fi
+
+# /admin não pode estar exposto por padrão (FABRICA_EXPOR_ADMIN=false): cai no SPA, sem a tela do Django.
+for caminho in /admin /admin/ /admin/login/; do
+  corpo="$(curl -s -H 'Host: fumaca.local' "http://localhost:$porta$caminho" || true)"
+  if grep -qi 'csrfmiddlewaretoken\|Django' <<<"$corpo"; then
+    echo "$caminho está exposto pelo Caddy, mas FABRICA_EXPOR_ADMIN é false." >&2
+    exit 1
+  fi
+done
+echo "/admin fechado por padrão ok"
