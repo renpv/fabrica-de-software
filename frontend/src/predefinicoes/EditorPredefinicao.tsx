@@ -32,8 +32,8 @@ const ROTULO_DO_PAPEL: Record<TipoDePapel, string> = {
 function linhasIniciais(predefinicao: Predefinicao): Linha[] {
   const existentes = etapasDe(predefinicao);
   const por = new Map(existentes.map((e) => [e.chave, e]));
-  const chaves = [...existentes.map((e) => e.chave), ...ORDEM_DAS_ETAPAS.filter((c) => !por.has(c))];
-  return chaves.map((chave) => {
+  // Sempre na ordem canônica: o servidor recusa qualquer outra, e a ordem salva já é canônica.
+  return ORDEM_DAS_ETAPAS.map((chave) => {
     const e = por.get(chave);
     return {
       chave,

@@ -54,10 +54,10 @@ function projeto(id: string, predefinicaoId: string) {
   };
 }
 
-function preparar(projetos: unknown[] = []) {
+function preparar(projetos: unknown[] = [], atual: unknown = predefinicao) {
   servidor.use(
     http.get("/api/sessao/", () => HttpResponse.json(sessao)),
-    http.get("/api/predefinicoes/", () => HttpResponse.json([predefinicao])),
+    http.get("/api/predefinicoes/", () => HttpResponse.json([atual])),
     http.get("/api/projetos/", () => HttpResponse.json(projetos)),
     http.get("/api/contas-agente/", () =>
       HttpResponse.json([contaApi(CONTA_CURSOR, "Cursor da Ana", "cursor"), contaApi(CONTA_CLAUDE, "Claude da Ana", "claude")]),
@@ -187,5 +187,26 @@ describe("Predefinições", () => {
     const etapa = etapaNoEditor(editor, "revisar");
     expect(await within(etapa).findByText("Etapa revisar: conta não encontrada. Escolha uma das suas contas.")).toBeInTheDocument();
     expect(within(etapaNoEditor(editor, "implementar")).queryByText(/conta não encontrada/)).toBeNull();
+  });
+
+  it("ativar uma etapa ausente a envia na posição canônica", async () => {
+    const semRevisar = { ...predefinicao, etapas: etapasPadrao.filter((e) => e.chave !== "revisar") };
+    preparar([], semRevisar);
+    let corpo: { etapas: { chave: string }[] } | undefined;
+    servidor.use(
+      http.patch("/api/predefinicoes/p1/", async ({ request }) => {
+        corpo = (await request.json()) as { etapas: { chave: string }[] };
+        return HttpResponse.json(semRevisar);
+      }),
+    );
+    const usuario = userEvent.setup();
+    renderizarApp("/predefinicoes");
+    const editor = await abrirEditor(usuario);
+
+    await usuario.click(within(etapaNoEditor(editor, "revisar")).getByRole("switch"));
+    await usuario.selectOptions(within(etapaNoEditor(editor, "revisar")).getByLabelText("Conta"), "Claude da Ana");
+    await usuario.click(within(editor).getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => expect(corpo?.etapas.map((e) => e.chave)).toEqual(etapasPadrao.map((e) => e.chave)));
   });
 });
