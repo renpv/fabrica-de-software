@@ -42,8 +42,21 @@ export function useSessao() {
   const sairMutacao = useMutation({
     mutationFn: async () => {
       const { error, response } = await api.DELETE("/api/sessao/");
-      // Sessão já expirada: o objetivo (estar fora) está cumprido; a rota protegida leva a /entrar.
-      if (response.status === 401 || response.status === 403) return;
+      // 401: já estava fora; a rota protegida leva a /entrar.
+      if (response.status === 401) return;
+      // 403 também é CSRF recusado, com a sessão do servidor viva: só conta como "fora" se a
+      // reconsulta confirmar que não há sessão. Qualquer outro resultado mantém o estado e mostra o erro.
+      if (response.status === 403) {
+        let confirmada = false;
+        try {
+          const { response: reconsulta } = await api.GET("/api/sessao/");
+          confirmada = reconsulta.status === 401 || reconsulta.status === 403;
+        } catch {
+          // falha de rede: não dá para confirmar
+        }
+        if (confirmada) return;
+        throw new ErroDeSessao(MENSAGEM_SAIR);
+      }
       if (!response.ok) throw new ErroDeSessao(mensagemDeErro(error, MENSAGEM_SAIR));
     },
     onSuccess: () => {
