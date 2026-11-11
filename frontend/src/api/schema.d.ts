@@ -162,6 +162,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/conexoes-plataforma/gitlab/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Conecta uma instância GitLab por token: testa e só grava se o teste passar. */
+        post: operations["conexoes_plataforma_gitlab_criar"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/contas-agente/": {
         parameters: {
             query?: never;
@@ -228,6 +245,165 @@ export interface paths {
         put?: never;
         /** @description Testa tipo, credenciais e config sem gravar nada. */
         post: operations["contas_agente_testar_dados"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/etapas-e-gatilhos/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Os rótulos em pt-BR das etapas, dos gatilhos e dos métodos. */
+        get: operations["etapas_e_gatilhos_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/predefinicoes/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Predefinições de fluxo do dono logado. */
+        get: operations["predefinicoes_list"];
+        put?: never;
+        /** @description Predefinições de fluxo do dono logado. */
+        post: operations["predefinicoes_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/predefinicoes/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Predefinições de fluxo do dono logado. */
+        get: operations["predefinicoes_retrieve"];
+        put?: never;
+        post?: never;
+        /** @description Predefinições de fluxo do dono logado. */
+        delete: operations["predefinicoes_destroy"];
+        options?: never;
+        head?: never;
+        /** @description Predefinições de fluxo do dono logado. */
+        patch: operations["predefinicoes_partial_update"];
+        trace?: never;
+    };
+    "/api/predefinicoes/{id}/duplicar/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Copia a predefinição com outro nome. */
+        post: operations["predefinicoes_duplicar_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/predefinicoes/padrao/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Cria o «Padrão» com a conta que implementa e a que revisa. */
+        post: operations["predefinicoes_padrao_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projetos/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Projetos do dono logado. Criam-se por POST (busca o repositório e já prepara). */
+        get: operations["projetos_list"];
+        put?: never;
+        /** @description Projetos do dono logado. Criam-se por POST (busca o repositório e já prepara). */
+        post: operations["projetos_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projetos/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Projetos do dono logado. Criam-se por POST (busca o repositório e já prepara). */
+        get: operations["projetos_retrieve"];
+        put?: never;
+        post?: never;
+        /** @description Projetos do dono logado. Criam-se por POST (busca o repositório e já prepara). */
+        delete: operations["projetos_destroy"];
+        options?: never;
+        head?: never;
+        /** @description Projetos do dono logado. Criam-se por POST (busca o repositório e já prepara). */
+        patch: operations["projetos_partial_update"];
+        trace?: never;
+    };
+    "/api/projetos/{id}/conferir/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Confere o repositório (etiquetas, webhook) sem alterar nada. */
+        post: operations["projetos_conferir_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projetos/{id}/preparar/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Cria o que falta no repositório. Pode ser repetido. */
+        post: operations["projetos_preparar_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -322,6 +498,11 @@ export interface components {
          * @enum {string}
          */
         ConexaoPlataformaStatusEnum: "nao_testada" | "ok" | "falha";
+        Conferencia: {
+            itens: components["schemas"]["ItemConferencia"][];
+            /** Format: date-time */
+            conferido_em: string | null;
+        };
         /** @description Conta de agente. `credenciais` só entra; a leitura devolve `tem_credenciais`. */
         ContaAgente: {
             /** Format: uuid */
@@ -347,8 +528,44 @@ export interface components {
          * @enum {string}
          */
         ContaAgenteStatusEnum: "nao_testada" | "ok" | "falha" | "aguardando_runner";
+        CriarGitLab: {
+            nome: string;
+            url_base: string;
+            token: string;
+        };
+        CriarPadrao: {
+            /** Format: uuid */
+            executor: string;
+            /** Format: uuid */
+            revisor: string;
+        };
+        CriarProjeto: {
+            nome: string;
+            /** Format: uuid */
+            conexao: string;
+            repositorio_id_externo: string;
+            /** Format: uuid */
+            cliente?: string | null;
+            /** Format: uuid */
+            predefinicao?: string | null;
+        };
+        Duplicar: {
+            nome: string;
+        };
         Erro: {
             detail: string;
+        };
+        EtapasEGatilhos: {
+            etapas: components["schemas"]["Rotulo"][];
+            gatilhos: components["schemas"]["Rotulo"][];
+            metodos: components["schemas"]["Rotulo"][];
+        };
+        ItemConferencia: {
+            chave: string;
+            titulo: string;
+            ok: boolean;
+            mensagem: string;
+            consertavel: boolean;
         };
         Login: {
             usuario: string;
@@ -390,6 +607,64 @@ export interface components {
             readonly tem_credenciais?: boolean;
             credenciais?: unknown;
         };
+        PatchedPredefinicao: {
+            /** Format: uuid */
+            readonly id?: string;
+            nome?: string;
+            descricao?: string;
+            metodo?: string;
+            etapas?: unknown;
+            merge_autonomo?: boolean;
+        };
+        /** @description Leitura do projeto. Só `nome`, `cliente`, `predefinicao` e `ativo` mudam por PATCH. */
+        PatchedProjeto: {
+            /** Format: uuid */
+            readonly id?: string;
+            nome?: string;
+            /** Format: uuid */
+            readonly conexao?: string;
+            readonly repositorio_caminho?: string;
+            readonly repositorio_id_externo?: string;
+            readonly repositorio_url?: string;
+            /** Format: uuid */
+            cliente?: string | null;
+            /** Format: uuid */
+            predefinicao?: string | null;
+            ativo?: boolean;
+            readonly conferencia?: unknown;
+            /** Format: date-time */
+            readonly ultima_conferencia_em?: string | null;
+            readonly erro_ao_preparar?: string;
+        };
+        Predefinicao: {
+            /** Format: uuid */
+            readonly id: string;
+            nome: string;
+            descricao?: string;
+            metodo?: string;
+            etapas: unknown;
+            merge_autonomo?: boolean;
+        };
+        /** @description Leitura do projeto. Só `nome`, `cliente`, `predefinicao` e `ativo` mudam por PATCH. */
+        Projeto: {
+            /** Format: uuid */
+            readonly id: string;
+            nome: string;
+            /** Format: uuid */
+            readonly conexao: string;
+            readonly repositorio_caminho: string;
+            readonly repositorio_id_externo: string;
+            readonly repositorio_url: string;
+            /** Format: uuid */
+            cliente?: string | null;
+            /** Format: uuid */
+            predefinicao?: string | null;
+            ativo?: boolean;
+            readonly conferencia: unknown;
+            /** Format: date-time */
+            readonly ultima_conferencia_em: string | null;
+            readonly erro_ao_preparar: string;
+        };
         Repositorio: {
             id_externo: string;
             caminho: string;
@@ -399,6 +674,10 @@ export interface components {
             ok: boolean;
             status: string;
             mensagem: string;
+        };
+        Rotulo: {
+            chave: string;
+            rotulo: string;
         };
         TesteDaConexao: {
             ok: boolean;
@@ -766,6 +1045,39 @@ export interface operations {
             };
         };
     };
+    conexoes_plataforma_gitlab_criar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CriarGitLab"];
+                "application/x-www-form-urlencoded": components["schemas"]["CriarGitLab"];
+                "multipart/form-data": components["schemas"]["CriarGitLab"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConexaoPlataforma"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Erro"];
+                };
+            };
+        };
+    };
     contas_agente_list: {
         parameters: {
             query?: never;
@@ -952,6 +1264,432 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResultadoTeste"];
+                };
+            };
+        };
+    };
+    etapas_e_gatilhos_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EtapasEGatilhos"];
+                };
+            };
+        };
+    };
+    predefinicoes_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Predefinicao"][];
+                };
+            };
+        };
+    };
+    predefinicoes_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Predefinicao"];
+                "application/x-www-form-urlencoded": components["schemas"]["Predefinicao"];
+                "multipart/form-data": components["schemas"]["Predefinicao"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Predefinicao"];
+                };
+            };
+        };
+    };
+    predefinicoes_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Um string UUID que identifica este predefinição. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Predefinicao"];
+                };
+            };
+        };
+    };
+    predefinicoes_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Um string UUID que identifica este predefinição. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Erro"];
+                };
+            };
+        };
+    };
+    predefinicoes_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Um string UUID que identifica este predefinição. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedPredefinicao"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedPredefinicao"];
+                "multipart/form-data": components["schemas"]["PatchedPredefinicao"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Predefinicao"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Erro"];
+                };
+            };
+        };
+    };
+    predefinicoes_duplicar_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Um string UUID que identifica este predefinição. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Duplicar"];
+                "application/x-www-form-urlencoded": components["schemas"]["Duplicar"];
+                "multipart/form-data": components["schemas"]["Duplicar"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Predefinicao"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Erro"];
+                };
+            };
+        };
+    };
+    predefinicoes_padrao_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CriarPadrao"];
+                "application/x-www-form-urlencoded": components["schemas"]["CriarPadrao"];
+                "multipart/form-data": components["schemas"]["CriarPadrao"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Predefinicao"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Erro"];
+                };
+            };
+        };
+    };
+    projetos_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Projeto"][];
+                };
+            };
+        };
+    };
+    projetos_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CriarProjeto"];
+                "application/x-www-form-urlencoded": components["schemas"]["CriarProjeto"];
+                "multipart/form-data": components["schemas"]["CriarProjeto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Projeto"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Erro"];
+                };
+            };
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Erro"];
+                };
+            };
+        };
+    };
+    projetos_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Um string UUID que identifica este projeto. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Projeto"];
+                };
+            };
+        };
+    };
+    projetos_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Um string UUID que identifica este projeto. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    projetos_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Um string UUID que identifica este projeto. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedProjeto"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedProjeto"];
+                "multipart/form-data": components["schemas"]["PatchedProjeto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Projeto"];
+                };
+            };
+        };
+    };
+    projetos_conferir_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Um string UUID que identifica este projeto. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Conferencia"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Erro"];
+                };
+            };
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Erro"];
+                };
+            };
+        };
+    };
+    projetos_preparar_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Um string UUID que identifica este projeto. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Conferencia"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Erro"];
+                };
+            };
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Erro"];
                 };
             };
         };

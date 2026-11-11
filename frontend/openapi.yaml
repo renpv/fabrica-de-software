@@ -350,6 +350,40 @@ paths:
       responses:
         '302':
           description: No response body
+  /api/conexoes-plataforma/gitlab/:
+    post:
+      operationId: conexoes_plataforma_gitlab_criar
+      description: 'Conecta uma instância GitLab por token: testa e só grava se o
+        teste passar.'
+      tags:
+      - conexoes-plataforma
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CriarGitLab'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CriarGitLab'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CriarGitLab'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConexaoPlataforma'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+          description: ''
   /api/contas-agente/:
     get:
       operationId: contas_agente_list
@@ -551,6 +585,428 @@ paths:
               schema:
                 $ref: '#/components/schemas/ResultadoTeste'
           description: ''
+  /api/etapas-e-gatilhos/:
+    get:
+      operationId: etapas_e_gatilhos_retrieve
+      description: Os rótulos em pt-BR das etapas, dos gatilhos e dos métodos.
+      tags:
+      - etapas-e-gatilhos
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EtapasEGatilhos'
+          description: ''
+  /api/predefinicoes/:
+    get:
+      operationId: predefinicoes_list
+      description: Predefinições de fluxo do dono logado.
+      tags:
+      - predefinicoes
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Predefinicao'
+          description: ''
+    post:
+      operationId: predefinicoes_create
+      description: Predefinições de fluxo do dono logado.
+      tags:
+      - predefinicoes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Predefinicao'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Predefinicao'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Predefinicao'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Predefinicao'
+          description: ''
+  /api/predefinicoes/{id}/:
+    get:
+      operationId: predefinicoes_retrieve
+      description: Predefinições de fluxo do dono logado.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Um string UUID que identifica este predefinição.
+        required: true
+      tags:
+      - predefinicoes
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Predefinicao'
+          description: ''
+    patch:
+      operationId: predefinicoes_partial_update
+      description: Predefinições de fluxo do dono logado.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Um string UUID que identifica este predefinição.
+        required: true
+      tags:
+      - predefinicoes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPredefinicao'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPredefinicao'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPredefinicao'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Predefinicao'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+          description: ''
+    delete:
+      operationId: predefinicoes_destroy
+      description: Predefinições de fluxo do dono logado.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Um string UUID que identifica este predefinição.
+        required: true
+      tags:
+      - predefinicoes
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+          description: ''
+  /api/predefinicoes/{id}/duplicar/:
+    post:
+      operationId: predefinicoes_duplicar_create
+      description: Copia a predefinição com outro nome.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Um string UUID que identifica este predefinição.
+        required: true
+      tags:
+      - predefinicoes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Duplicar'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Duplicar'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Duplicar'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Predefinicao'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+          description: ''
+  /api/predefinicoes/padrao/:
+    post:
+      operationId: predefinicoes_padrao_create
+      description: Cria o «Padrão» com a conta que implementa e a que revisa.
+      tags:
+      - predefinicoes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CriarPadrao'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CriarPadrao'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CriarPadrao'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Predefinicao'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+          description: ''
+  /api/projetos/:
+    get:
+      operationId: projetos_list
+      description: Projetos do dono logado. Criam-se por POST (busca o repositório
+        e já prepara).
+      tags:
+      - projetos
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Projeto'
+          description: ''
+    post:
+      operationId: projetos_create
+      description: Projetos do dono logado. Criam-se por POST (busca o repositório
+        e já prepara).
+      tags:
+      - projetos
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CriarProjeto'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CriarProjeto'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CriarProjeto'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Projeto'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+          description: ''
+        '502':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+          description: ''
+  /api/projetos/{id}/:
+    get:
+      operationId: projetos_retrieve
+      description: Projetos do dono logado. Criam-se por POST (busca o repositório
+        e já prepara).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Um string UUID que identifica este projeto.
+        required: true
+      tags:
+      - projetos
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Projeto'
+          description: ''
+    patch:
+      operationId: projetos_partial_update
+      description: Projetos do dono logado. Criam-se por POST (busca o repositório
+        e já prepara).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Um string UUID que identifica este projeto.
+        required: true
+      tags:
+      - projetos
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProjeto'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProjeto'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProjeto'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Projeto'
+          description: ''
+    delete:
+      operationId: projetos_destroy
+      description: Projetos do dono logado. Criam-se por POST (busca o repositório
+        e já prepara).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Um string UUID que identifica este projeto.
+        required: true
+      tags:
+      - projetos
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/projetos/{id}/conferir/:
+    post:
+      operationId: projetos_conferir_create
+      description: Confere o repositório (etiquetas, webhook) sem alterar nada.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Um string UUID que identifica este projeto.
+        required: true
+      tags:
+      - projetos
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conferencia'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+          description: ''
+        '502':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+          description: ''
+  /api/projetos/{id}/preparar/:
+    post:
+      operationId: projetos_preparar_create
+      description: Cria o que falta no repositório. Pode ser repetido.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: Um string UUID que identifica este projeto.
+        required: true
+      tags:
+      - projetos
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conferencia'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+          description: ''
+        '502':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+          description: ''
   /api/saude/:
     get:
       operationId: saude_retrieve
@@ -717,6 +1173,20 @@ components:
         * `nao_testada` - Não testada
         * `ok` - Funcionando
         * `falha` - Com falha
+    Conferencia:
+      type: object
+      properties:
+        itens:
+          type: array
+          items:
+            $ref: '#/components/schemas/ItemConferencia'
+        conferido_em:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - conferido_em
+      - itens
     ContaAgente:
       type: object
       description: Conta de agente. `credenciais` só entra; a leitura devolve `tem_credenciais`.
@@ -776,6 +1246,67 @@ components:
         * `ok` - Funcionando
         * `falha` - Com falha
         * `aguardando_runner` - Aguardando o runner
+    CriarGitLab:
+      type: object
+      properties:
+        nome:
+          type: string
+          maxLength: 120
+        url_base:
+          type: string
+          maxLength: 200
+        token:
+          type: string
+          writeOnly: true
+          maxLength: 500
+      required:
+      - nome
+      - token
+      - url_base
+    CriarPadrao:
+      type: object
+      properties:
+        executor:
+          type: string
+          format: uuid
+        revisor:
+          type: string
+          format: uuid
+      required:
+      - executor
+      - revisor
+    CriarProjeto:
+      type: object
+      properties:
+        nome:
+          type: string
+          maxLength: 120
+        conexao:
+          type: string
+          format: uuid
+        repositorio_id_externo:
+          type: string
+          maxLength: 100
+        cliente:
+          type: string
+          format: uuid
+          nullable: true
+        predefinicao:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - conexao
+      - nome
+      - repositorio_id_externo
+    Duplicar:
+      type: object
+      properties:
+        nome:
+          type: string
+          maxLength: 120
+      required:
+      - nome
     Erro:
       type: object
       properties:
@@ -783,6 +1314,44 @@ components:
           type: string
       required:
       - detail
+    EtapasEGatilhos:
+      type: object
+      properties:
+        etapas:
+          type: array
+          items:
+            $ref: '#/components/schemas/Rotulo'
+        gatilhos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Rotulo'
+        metodos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Rotulo'
+      required:
+      - etapas
+      - gatilhos
+      - metodos
+    ItemConferencia:
+      type: object
+      properties:
+        chave:
+          type: string
+        titulo:
+          type: string
+        ok:
+          type: boolean
+        mensagem:
+          type: string
+        consertavel:
+          type: boolean
+      required:
+      - chave
+      - consertavel
+      - mensagem
+      - ok
+      - titulo
     Login:
       type: object
       properties:
@@ -874,6 +1443,146 @@ components:
           readOnly: true
         credenciais:
           writeOnly: true
+    PatchedPredefinicao:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        nome:
+          type: string
+          maxLength: 120
+        descricao:
+          type: string
+        metodo:
+          type: string
+          maxLength: 40
+        etapas: {}
+        merge_autonomo:
+          type: boolean
+    PatchedProjeto:
+      type: object
+      description: Leitura do projeto. Só `nome`, `cliente`, `predefinicao` e `ativo`
+        mudam por PATCH.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        nome:
+          type: string
+          maxLength: 120
+        conexao:
+          type: string
+          format: uuid
+          readOnly: true
+        repositorio_caminho:
+          type: string
+          readOnly: true
+        repositorio_id_externo:
+          type: string
+          readOnly: true
+        repositorio_url:
+          type: string
+          readOnly: true
+        cliente:
+          type: string
+          format: uuid
+          nullable: true
+        predefinicao:
+          type: string
+          format: uuid
+          nullable: true
+        ativo:
+          type: boolean
+        conferencia:
+          readOnly: true
+        ultima_conferencia_em:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        erro_ao_preparar:
+          type: string
+          readOnly: true
+    Predefinicao:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        nome:
+          type: string
+          maxLength: 120
+        descricao:
+          type: string
+        metodo:
+          type: string
+          maxLength: 40
+        etapas: {}
+        merge_autonomo:
+          type: boolean
+      required:
+      - etapas
+      - id
+      - nome
+    Projeto:
+      type: object
+      description: Leitura do projeto. Só `nome`, `cliente`, `predefinicao` e `ativo`
+        mudam por PATCH.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        nome:
+          type: string
+          maxLength: 120
+        conexao:
+          type: string
+          format: uuid
+          readOnly: true
+        repositorio_caminho:
+          type: string
+          readOnly: true
+        repositorio_id_externo:
+          type: string
+          readOnly: true
+        repositorio_url:
+          type: string
+          readOnly: true
+        cliente:
+          type: string
+          format: uuid
+          nullable: true
+        predefinicao:
+          type: string
+          format: uuid
+          nullable: true
+        ativo:
+          type: boolean
+        conferencia:
+          readOnly: true
+        ultima_conferencia_em:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        erro_ao_preparar:
+          type: string
+          readOnly: true
+      required:
+      - conexao
+      - conferencia
+      - erro_ao_preparar
+      - id
+      - nome
+      - repositorio_caminho
+      - repositorio_id_externo
+      - repositorio_url
+      - ultima_conferencia_em
     Repositorio:
       type: object
       properties:
@@ -900,6 +1609,16 @@ components:
       - mensagem
       - ok
       - status
+    Rotulo:
+      type: object
+      properties:
+        chave:
+          type: string
+        rotulo:
+          type: string
+      required:
+      - chave
+      - rotulo
     TesteDaConexao:
       type: object
       properties:
