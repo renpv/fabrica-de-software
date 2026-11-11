@@ -1,6 +1,6 @@
 # Fábrica de software
 
-Orquestra agentes de IA que implementam projetos. Back-end Django + DRF em `backend/`; front-end React com TypeScript em `frontend/` (a partir da Task 11 do Plano 1).
+Orquestra agentes de IA que implementam projetos. Back-end Django + DRF em `backend/`; front-end React com TypeScript em `frontend/`.
 
 ## Comandos
 - Banco: `docker compose -f docker-compose.dev.yml up -d db` (PostgreSQL 18, porta 5434).
@@ -12,7 +12,7 @@ Orquestra agentes de IA que implementam projetos. Back-end Django + DRF em `back
 - Django `>=5.2.19,<5.3` e as outras dependências: `backend/pyproject.toml`, travadas em `backend/uv.lock`.
 - uv: `[tool.uv] required-version` em `backend/pyproject.toml`; no CI, `version` do `setup-uv` em `.github/workflows/ci.yml`.
 - PostgreSQL 18: `docker-compose.dev.yml` e `ci.yml`.
-- Node 26: `frontend/.nvmrc` (Task 11).
+- Node 26: `frontend/.nvmrc` e `engines` em `frontend/package.json`; o CI usa o `.nvmrc` no `setup-node`.
 - Fonte e motivos: `docs/pesquisa/2026-11-07-versoes-da-stack.md`.
 
 ## Configuração

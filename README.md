@@ -20,13 +20,25 @@ Teste rápido: `curl http://localhost:8000/api/saude/` deve devolver `{"status":
 
 Para o banco do `docker-compose.dev.yml`, use `DATABASE_URL=postgres://fabrica:fabrica@localhost:5434/fabrica`.
 
+### Front-end
+
+Requisito: Node 26 (`frontend/.nvmrc`).
+
+```bash
+cd frontend
+npm ci
+npm run dev     # http://localhost:5173, com /api encaminhado para http://localhost:8000
+```
+
+Suba o back-end antes (passos acima). Depois de atualizar o `frontend/openapi.yaml`, rode `npm run gerar-api` para regenerar os tipos da API.
+
 ## Como testar
 
 ```bash
 automacao/verificar.sh
 ```
 
-Roda `ruff` (check e format), os contratos de importação, a checagem de migrações e o `pytest`. É o mesmo script do CI e do pre-push. Sem variáveis definidas, ele usa o banco de desenvolvimento acima.
+Roda `ruff` (check e format), os contratos de importação, a checagem de migrações e o `pytest`, e depois, no front-end, `npm ci`, o lint, o `tsc -b` e o `vitest`. É o mesmo script do CI e do pre-push. Sem variáveis definidas, ele usa o banco de desenvolvimento acima.
 
 Para ligar os hooks do git: `~/.claude/revisao/git-hooks/instalar.sh .` e depois `pre-commit install`.
 
