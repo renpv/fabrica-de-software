@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes } from "react-router";
 import { TelaContas } from "../contas/TelaContas";
-import { Pagina } from "../paginas/Pagina";
+import { TelaPredefinicoes } from "../predefinicoes/TelaPredefinicoes";
 import { TelaPlataformas } from "../plataformas/TelaPlataformas";
 import { RotaProtegida } from "../sessao/RotaProtegida";
 import { TelaLogin } from "../sessao/TelaLogin";
@@ -14,7 +14,7 @@ export function RotasApp() {
         <Route element={<Layout />}>
           <Route path="/contas" element={<TelaContas />} />
           <Route path="/plataformas" element={<TelaPlataformas />} />
-          <Route path="/predefinicoes" element={<Pagina titulo="Predefinições" />} />
+          <Route path="/predefinicoes" element={<TelaPredefinicoes />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/contas" replace />} />
