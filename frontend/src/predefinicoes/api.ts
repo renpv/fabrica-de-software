@@ -49,13 +49,23 @@ export function useRotulos() {
   });
 }
 
-export type DadosDaPredefinicao = { metodo: string; etapas: EtapaDaApi[]; merge_autonomo: boolean };
+export type DadosDaPredefinicao = {
+  nome: string;
+  metodo: string;
+  etapas: EtapaDaApi[];
+  merge_autonomo: boolean;
+};
 
 export function useSalvarPredefinicao(id: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (dados: DadosDaPredefinicao) =>
-      chamar(qc, () => api.PATCH("/api/predefinicoes/{id}/", { params: { path: { id } }, body: dados })),
+      chamar(qc, () =>
+        api.PATCH("/api/predefinicoes/{id}/", {
+          params: { path: { id } },
+          body: dados,
+        }),
+      ),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["predefinicoes"] }),
   });
 }
@@ -63,7 +73,7 @@ export function useSalvarPredefinicao(id: string) {
 export function useCriarPadrao() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (dados: { executor: string; revisor: string }) =>
+    mutationFn: (dados: { executor: string; revisor: string; nome: string }) =>
       chamar(qc, () => api.POST("/api/predefinicoes/padrao/", { body: dados })),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["predefinicoes"] }),
   });
@@ -73,7 +83,12 @@ export function useDuplicar(id: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (nome: string) =>
-      chamar(qc, () => api.POST("/api/predefinicoes/{id}/duplicar/", { params: { path: { id } }, body: { nome } })),
+      chamar(qc, () =>
+        api.POST("/api/predefinicoes/{id}/duplicar/", {
+          params: { path: { id } },
+          body: { nome },
+        }),
+      ),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["predefinicoes"] }),
   });
 }

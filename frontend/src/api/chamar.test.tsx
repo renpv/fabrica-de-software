@@ -116,7 +116,7 @@ describe("cabeçalho CSRF", () => {
       http.delete("/api/predefinicoes/p1/", anotar("DELETE")),
     );
     await api.GET("/api/contas-agente/");
-    await api.POST("/api/predefinicoes/padrao/", { body: { executor: "a", revisor: "b" } });
+    await api.POST("/api/predefinicoes/padrao/", { body: { executor: "a", revisor: "b", nome: "Padrão" } });
     await api.PATCH("/api/predefinicoes/{id}/", { params: { path: { id: "p1" } }, body: {} });
     await api.DELETE("/api/predefinicoes/{id}/", { params: { path: { id: "p1" } } });
     expect(vistos).toEqual({

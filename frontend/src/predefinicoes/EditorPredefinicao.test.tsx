@@ -27,8 +27,16 @@ const CONTA_CLAUDE = "22222222-2222-4222-8222-222222222222";
 
 const etapasPadrao = [
   { chave: "publicar_tasks", papel: { tipo: "central" }, gatilho: AUTO },
-  { chave: "implementar", papel: { tipo: "conta", conta_id: CONTA_CURSOR }, gatilho: AUTO },
-  { chave: "revisar", papel: { tipo: "conta", conta_id: CONTA_CLAUDE }, gatilho: AUTO },
+  {
+    chave: "implementar",
+    papel: { tipo: "conta", conta_id: CONTA_CURSOR },
+    gatilho: AUTO,
+  },
+  {
+    chave: "revisar",
+    papel: { tipo: "conta", conta_id: CONTA_CLAUDE },
+    gatilho: AUTO,
+  },
   { chave: "merge", papel: { tipo: "central" }, gatilho: AUTO },
   { chave: "promover", papel: { tipo: "humano" }, gatilho: "decisao_humana" },
 ];
@@ -60,12 +68,29 @@ function preparar(projetos: unknown[] = [], atual: unknown = predefinicao) {
     http.get("/api/predefinicoes/", () => HttpResponse.json([atual])),
     http.get("/api/projetos/", () => HttpResponse.json(projetos)),
     http.get("/api/contas-agente/", () =>
-      HttpResponse.json([contaApi(CONTA_CURSOR, "Cursor da Ana", "cursor"), contaApi(CONTA_CLAUDE, "Claude da Ana", "claude")]),
+      HttpResponse.json([
+        contaApi(CONTA_CURSOR, "Cursor da Ana", "cursor"),
+        contaApi(CONTA_CLAUDE, "Claude da Ana", "claude"),
+      ]),
     ),
     http.get("/api/tipos-de-agente/", () =>
       HttpResponse.json([
-        { tipo: "cursor", nome: "Cursor", etiqueta: "cursor", modelos_sugeridos: ["composer-2", "gpt-5"], campos: [], guia: [] },
-        { tipo: "claude", nome: "Claude", etiqueta: "claude", modelos_sugeridos: ["claude-opus-5"], campos: [], guia: [] },
+        {
+          tipo: "cursor",
+          nome: "Cursor",
+          etiqueta: "cursor",
+          modelos_sugeridos: ["composer-2", "gpt-5"],
+          campos: [],
+          guia: [],
+        },
+        {
+          tipo: "claude",
+          nome: "Claude",
+          etiqueta: "claude",
+          modelos_sugeridos: ["claude-opus-5"],
+          campos: [],
+          guia: [],
+        },
       ]),
     ),
     http.get("/api/etapas-e-gatilhos/", () =>
@@ -116,11 +141,32 @@ describe("Predefinições", () => {
     const dialogo = await screen.findByRole("dialog");
     const criar = within(dialogo).getByRole("button", { name: "Criar" });
     expect(criar).toBeDisabled();
+    expect(within(dialogo).getByLabelText("Nome")).toHaveValue("Padrão");
     await usuario.selectOptions(within(dialogo).getByLabelText("Executor"), "Cursor da Ana");
     await usuario.selectOptions(within(dialogo).getByLabelText("Revisor"), "Claude da Ana");
+    await usuario.clear(within(dialogo).getByLabelText("Nome"));
+    await usuario.type(within(dialogo).getByLabelText("Nome"), "Meu fluxo");
     await usuario.click(criar);
 
-    await waitFor(() => expect(corpo).toEqual({ executor: CONTA_CURSOR, revisor: CONTA_CLAUDE }));
+    await waitFor(() =>
+      expect(corpo).toEqual({
+        executor: CONTA_CURSOR,
+        revisor: CONTA_CLAUDE,
+        nome: "Meu fluxo",
+      }),
+    );
+  });
+
+  it("criar a partir do padrão não deixa o nome em branco", async () => {
+    preparar();
+    const usuario = userEvent.setup();
+    renderizarApp("/predefinicoes");
+    await usuario.click(await screen.findByRole("button", { name: "Criar a partir do Padrão" }));
+    const dialogo = await screen.findByRole("dialog");
+    await usuario.selectOptions(within(dialogo).getByLabelText("Executor"), "Cursor da Ana");
+    await usuario.selectOptions(within(dialogo).getByLabelText("Revisor"), "Claude da Ana");
+    await usuario.clear(within(dialogo).getByLabelText("Nome"));
+    expect(within(dialogo).getByRole("button", { name: "Criar" })).toBeDisabled();
   });
 
   it("criar a partir do padrão mostra o erro por campo do servidor", async () => {
@@ -161,6 +207,70 @@ describe("Predefinições", () => {
     expect(await within(dialogo).findByText(/Já existe uma predefinição com este nome\./)).toBeInTheDocument();
   });
 
+  it("o editor não oferece mover etapas", async () => {
+    preparar();
+    const usuario = userEvent.setup();
+    renderizarApp("/predefinicoes");
+    const editor = await abrirEditor(usuario);
+    expect(within(editor).queryByRole("button", { name: /Subir|Descer/ })).toBeNull();
+  });
+
+  it("renomeia a predefinição no editor", async () => {
+    preparar();
+    let corpo: { nome?: string } | null = null;
+    servidor.use(
+      http.patch("/api/predefinicoes/p1/", async ({ request }) => {
+        corpo = (await request.json()) as { nome?: string };
+        return HttpResponse.json(predefinicao);
+      }),
+    );
+    const usuario = userEvent.setup();
+    renderizarApp("/predefinicoes");
+    const editor = await abrirEditor(usuario);
+
+    const campo = within(editor).getByLabelText("Nome");
+    expect(campo).toHaveValue("Padrão");
+    await usuario.clear(campo);
+    await usuario.type(campo, "Fluxo do Ana");
+    await usuario.click(within(editor).getByRole("button", { name: "Salvar" }));
+    await waitFor(() => expect(corpo?.nome).toBe("Fluxo do Ana"));
+  });
+
+  it("mostra o erro do nome junto do campo", async () => {
+    preparar();
+    servidor.use(
+      http.patch("/api/predefinicoes/p1/", () =>
+        HttpResponse.json({ nome: ["Este campo não pode ficar em branco."] }, { status: 400 }),
+      ),
+    );
+    const usuario = userEvent.setup();
+    renderizarApp("/predefinicoes");
+    const editor = await abrirEditor(usuario);
+    await usuario.click(within(editor).getByRole("button", { name: "Salvar" }));
+    expect(await within(editor).findByText("Este campo não pode ficar em branco.")).toBeInTheDocument();
+  });
+
+  it("o erro de ordem mostra os nomes das etapas, não as chaves", async () => {
+    preparar();
+    servidor.use(
+      http.patch("/api/predefinicoes/p1/", () =>
+        HttpResponse.json(
+          {
+            etapas: ["As etapas precisam seguir a ordem: publicar_tasks, implementar, revisar, merge, promover."],
+          },
+          { status: 400 },
+        ),
+      ),
+    );
+    const usuario = userEvent.setup();
+    renderizarApp("/predefinicoes");
+    const editor = await abrirEditor(usuario);
+    await usuario.click(within(editor).getByRole("button", { name: "Salvar" }));
+    expect(await within(editor).findByRole("alert")).toHaveTextContent(
+      "As etapas precisam seguir a ordem: Publicar as tasks, Implementar, Revisar, Fazer o merge, Promover para produção.",
+    );
+  });
+
   it("promover só oferece humano", async () => {
     preparar();
     const usuario = userEvent.setup();
@@ -168,9 +278,17 @@ describe("Predefinições", () => {
     const editor = await abrirEditor(usuario);
 
     const papelPromover = within(etapaNoEditor(editor, "promover")).getByLabelText("Papel");
-    expect(within(papelPromover).getAllByRole("option").map((o) => o.textContent)).toEqual(["Humano"]);
+    expect(
+      within(papelPromover)
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["Humano"]);
     const papelImplementar = within(etapaNoEditor(editor, "implementar")).getByLabelText("Papel");
-    expect(within(papelImplementar).getAllByRole("option").map((o) => o.textContent)).toEqual(["Conta de agente"]);
+    expect(
+      within(papelImplementar)
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["Conta de agente"]);
   });
 
   it("modelo sugere os do tipo da conta", async () => {
@@ -182,11 +300,16 @@ describe("Predefinições", () => {
     const etapa = etapaNoEditor(editor, "implementar");
     const modelo = within(etapa).getByLabelText("Modelo") as HTMLInputElement;
     const lista = editor.ownerDocument.getElementById(modelo.getAttribute("list") as string) as HTMLElement;
-    expect(Array.from(lista.querySelectorAll("option")).map((o) => o.getAttribute("value"))).toEqual(["composer-2", "gpt-5"]);
+    expect(Array.from(lista.querySelectorAll("option")).map((o) => o.getAttribute("value"))).toEqual([
+      "composer-2",
+      "gpt-5",
+    ]);
 
     await usuario.selectOptions(within(etapa).getByLabelText("Conta"), "Claude da Ana");
     const lista2 = editor.ownerDocument.getElementById(modelo.getAttribute("list") as string) as HTMLElement;
-    expect(Array.from(lista2.querySelectorAll("option")).map((o) => o.getAttribute("value"))).toEqual(["claude-opus-5"]);
+    expect(Array.from(lista2.querySelectorAll("option")).map((o) => o.getAttribute("value"))).toEqual([
+      "claude-opus-5",
+    ]);
   });
 
   it("mostra o aviso de N projetos ao salvar", async () => {
@@ -202,7 +325,9 @@ describe("Predefinições", () => {
     renderizarApp("/predefinicoes");
     const editor = await abrirEditor(usuario);
 
-    expect(within(editor).getByText("Vale na hora para 2 projeto(s), a partir da próxima etapa de cada um.")).toBeInTheDocument();
+    expect(
+      within(editor).getByText("Vale na hora para 2 projeto(s), a partir da próxima etapa de cada um."),
+    ).toBeInTheDocument();
     await usuario.click(within(editor).getByRole("button", { name: "Salvar" }));
     await waitFor(() => expect(corpo?.etapas.map((e) => e.chave)).toEqual(etapasPadrao.map((e) => e.chave)));
   });
@@ -212,7 +337,9 @@ describe("Predefinições", () => {
     servidor.use(
       http.patch("/api/predefinicoes/p1/", () =>
         HttpResponse.json(
-          { etapas: ["Etapa revisar: conta não encontrada. Escolha uma das suas contas."] },
+          {
+            etapas: ["Etapa revisar: conta não encontrada. Escolha uma das suas contas."],
+          },
           { status: 400 },
         ),
       ),
@@ -223,12 +350,17 @@ describe("Predefinições", () => {
 
     await usuario.click(within(editor).getByRole("button", { name: "Salvar" }));
     const etapa = etapaNoEditor(editor, "revisar");
-    expect(await within(etapa).findByText("Etapa revisar: conta não encontrada. Escolha uma das suas contas.")).toBeInTheDocument();
+    expect(
+      await within(etapa).findByText("Etapa revisar: conta não encontrada. Escolha uma das suas contas."),
+    ).toBeInTheDocument();
     expect(within(etapaNoEditor(editor, "implementar")).queryByText(/conta não encontrada/)).toBeNull();
   });
 
   it("ativar uma etapa ausente a envia na posição canônica", async () => {
-    const semRevisar = { ...predefinicao, etapas: etapasPadrao.filter((e) => e.chave !== "revisar") };
+    const semRevisar = {
+      ...predefinicao,
+      etapas: etapasPadrao.filter((e) => e.chave !== "revisar"),
+    };
     preparar([], semRevisar);
     let corpo: { etapas: { chave: string }[] } | undefined;
     servidor.use(
