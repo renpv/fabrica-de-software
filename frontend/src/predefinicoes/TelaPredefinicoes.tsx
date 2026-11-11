@@ -1,5 +1,6 @@
 import { Alert, Button, Group, Loader, Modal, NativeSelect, Paper, Stack, Text, TextInput, Title } from "@mantine/core";
 import { useState } from "react";
+import { mensagemComCampos } from "../api/campos";
 import { EditorPredefinicao } from "./EditorPredefinicao";
 import {
   type Predefinicao,
@@ -28,7 +29,9 @@ function CriarPadrao({ onFechar }: { onFechar: () => void }) {
         <NativeSelect label="Revisor" data={opcoes} value={revisor} onChange={(e) => setRevisor(e.currentTarget.value)} />
         {(criar.error ?? contas.error) && (
           <Alert color="red" role="alert">
-            {(criar.error ?? contas.error)?.message}
+            {criar.error
+              ? mensagemComCampos(criar.error, { rotulos: { executor: "Executor", revisor: "Revisor" } })
+              : contas.error?.message}
           </Alert>
         )}
         <Group justify="flex-end">
@@ -57,7 +60,7 @@ function Duplicar({ predefinicao, onFechar }: { predefinicao: Predefinicao; onFe
         <TextInput label="Nome da cópia" value={nome} maxLength={120} onChange={(e) => setNome(e.currentTarget.value)} />
         {duplicar.error && (
           <Alert color="red" role="alert">
-            {duplicar.error.message}
+            {mensagemComCampos(duplicar.error, { rotulos: { nome: "Nome da cópia" } })}
           </Alert>
         )}
         <Group justify="flex-end">

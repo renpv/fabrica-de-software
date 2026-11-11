@@ -89,6 +89,28 @@ describe("AssistenteConta", () => {
     expect(screen.getByRole("button", { name: "Salvar" })).toBeDisabled();
   });
 
+  it("mostra no passo 3, com o nome do campo, o erro de campo do passo 2", async () => {
+    servidorBase();
+    servidor.use(
+      http.post("/api/contas-agente/testar/", () =>
+        HttpResponse.json({ ok: true, status: "ok", mensagem: "Chave válida." }),
+      ),
+      http.post("/api/contas-agente/", () =>
+        HttpResponse.json({ nome: ["Já existe uma conta com este nome."] }, { status: 400 }),
+      ),
+    );
+    const usuario = await abrirAssistente("Cursor");
+
+    await usuario.type(screen.getByLabelText(/^Nome/), "Cursor da Ana");
+    await usuario.type(screen.getByLabelText(/^Chave de API do Cursor/), "key_abc");
+    await usuario.click(screen.getByRole("button", { name: "Continuar" }));
+    await usuario.click(screen.getByRole("button", { name: "Testar conexão" }));
+    await screen.findByText("Chave válida.");
+    await usuario.click(screen.getByRole("button", { name: "Salvar" }));
+
+    expect(await screen.findByText(/Nome: Já existe uma conta com este nome\./)).toBeInTheDocument();
+  });
+
   it("claude local salva com o aviso de runner", async () => {
     servidorBase();
     let corpo: unknown;
