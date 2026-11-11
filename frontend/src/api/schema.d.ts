@@ -538,6 +538,8 @@ export interface components {
             executor: string;
             /** Format: uuid */
             revisor: string;
+            /** @default Padrão */
+            nome: string;
         };
         CriarProjeto: {
             nome: string;

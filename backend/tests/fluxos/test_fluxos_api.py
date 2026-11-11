@@ -231,3 +231,17 @@ def test_projeto_patch_so_de_cliente_reporta_em_cliente(
     r = _json(client, "patch", f"/api/projetos/{projeto.id}/", {"cliente": str(cliente_y.id)})
     assert r.status_code == 400
     assert "cliente" in r.json() and "predefinicao" not in r.json()
+
+
+def test_endpoint_padrao_aceita_nome(client, logado, contas):
+    executor, revisor = contas
+    corpo = {"executor": str(executor.id), "revisor": str(revisor.id), "nome": "Meu fluxo"}
+    r = _json(client, "post", f"{BASE}padrao/", corpo)
+    assert r.status_code == 201, r.content
+    assert r.json()["nome"] == "Meu fluxo"
+
+
+def test_endpoint_padrao_recusa_nome_em_branco(client, logado, contas):
+    executor, revisor = contas
+    corpo = {"executor": str(executor.id), "revisor": str(revisor.id), "nome": "  "}
+    assert _json(client, "post", f"{BASE}padrao/", corpo).status_code == 400

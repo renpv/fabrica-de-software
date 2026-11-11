@@ -36,6 +36,7 @@ class PredefinicaoSerializer(serializers.ModelSerializer):
 class CriarPadraoSerializer(serializers.Serializer):
     executor = serializers.PrimaryKeyRelatedField(queryset=ContaAgente.objects.none())
     revisor = serializers.PrimaryKeyRelatedField(queryset=ContaAgente.objects.none())
+    nome = serializers.CharField(max_length=120, required=False, default="Padrão")
 
     def get_fields(self):
         campos = super().get_fields()

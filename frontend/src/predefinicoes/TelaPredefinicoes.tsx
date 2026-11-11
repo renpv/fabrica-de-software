@@ -18,19 +18,42 @@ function CriarPadrao({ onFechar }: { onFechar: () => void }) {
   const criar = useCriarPadrao();
   const [executor, setExecutor] = useState("");
   const [revisor, setRevisor] = useState("");
-  const opcoes = [{ value: "", label: "Escolha uma conta" }, ...(contas.data ?? []).map((c) => ({ value: c.id, label: c.nome }))];
+  const [nome, setNome] = useState("Padrão");
+  const opcoes = [
+    { value: "", label: "Escolha uma conta" },
+    ...(contas.data ?? []).map((c) => ({ value: c.id, label: c.nome })),
+  ];
 
   return (
     <Modal opened onClose={onFechar} title="Criar a partir do Padrão" centered>
       <Stack>
         <Text size="sm">O Padrão publica as tasks, implementa, revisa, faz o merge e espera o ok para produção.</Text>
-        {contas.data?.length === 0 && <Alert color="yellow">Cadastre uma conta de agente antes, na tela de contas.</Alert>}
-        <NativeSelect label="Executor" data={opcoes} value={executor} onChange={(e) => setExecutor(e.currentTarget.value)} />
-        <NativeSelect label="Revisor" data={opcoes} value={revisor} onChange={(e) => setRevisor(e.currentTarget.value)} />
+        {contas.data?.length === 0 && (
+          <Alert color="yellow">Cadastre uma conta de agente antes, na tela de contas.</Alert>
+        )}
+        <TextInput label="Nome" value={nome} maxLength={120} onChange={(e) => setNome(e.currentTarget.value)} />
+        <NativeSelect
+          label="Executor"
+          data={opcoes}
+          value={executor}
+          onChange={(e) => setExecutor(e.currentTarget.value)}
+        />
+        <NativeSelect
+          label="Revisor"
+          data={opcoes}
+          value={revisor}
+          onChange={(e) => setRevisor(e.currentTarget.value)}
+        />
         {(criar.error ?? contas.error) && (
           <Alert color="red" role="alert">
             {criar.error
-              ? mensagemComCampos(criar.error, { rotulos: { executor: "Executor", revisor: "Revisor" } })
+              ? mensagemComCampos(criar.error, {
+                  rotulos: {
+                    nome: "Nome",
+                    executor: "Executor",
+                    revisor: "Revisor",
+                  },
+                })
               : contas.error?.message}
           </Alert>
         )}
@@ -39,9 +62,9 @@ function CriarPadrao({ onFechar }: { onFechar: () => void }) {
             Cancelar
           </Button>
           <Button
-            disabled={!executor || !revisor}
+            disabled={!nome.trim() || !executor || !revisor}
             loading={criar.isPending}
-            onClick={() => criar.mutate({ executor, revisor }, { onSuccess: onFechar })}
+            onClick={() => criar.mutate({ nome: nome.trim(), executor, revisor }, { onSuccess: onFechar })}
           >
             Criar
           </Button>
@@ -57,10 +80,17 @@ function Duplicar({ predefinicao, onFechar }: { predefinicao: Predefinicao; onFe
   return (
     <Modal opened onClose={onFechar} title={`Duplicar «${predefinicao.nome}»`} centered>
       <Stack>
-        <TextInput label="Nome da cópia" value={nome} maxLength={120} onChange={(e) => setNome(e.currentTarget.value)} />
+        <TextInput
+          label="Nome da cópia"
+          value={nome}
+          maxLength={120}
+          onChange={(e) => setNome(e.currentTarget.value)}
+        />
         {duplicar.error && (
           <Alert color="red" role="alert">
-            {mensagemComCampos(duplicar.error, { rotulos: { nome: "Nome da cópia" } })}
+            {mensagemComCampos(duplicar.error, {
+              rotulos: { nome: "Nome da cópia" },
+            })}
           </Alert>
         )}
         <Group justify="flex-end">
