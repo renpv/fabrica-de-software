@@ -1,4 +1,5 @@
 import { Alert, Button, Group, List, Stack, Text } from "@mantine/core";
+import { useState } from "react";
 import { type ItemConferencia, useConferencia } from "./api";
 
 type Props = {
@@ -12,7 +13,10 @@ type Props = {
 export function Conferencia({ projetoId, itens, erroAoPreparar }: Props) {
   const conferir = useConferencia(projetoId, "conferir");
   const consertar = useConferencia(projetoId, "preparar");
-  const atual = consertar.data?.itens ?? conferir.data?.itens ?? itens;
+  // O resultado mais recente, de quem terminou por último (conferir ou consertar).
+  const [recente, setRecente] = useState<ItemConferencia[] | null>(null);
+  const atual = recente ?? itens;
+  const guardar = { onSuccess: (r: { itens: ItemConferencia[] }) => setRecente(r.itens) };
   const erro = conferir.error?.message ?? consertar.error?.message ?? null;
   const podeConsertar = atual.some((i) => !i.ok && i.consertavel);
 
@@ -59,12 +63,12 @@ export function Conferencia({ projetoId, itens, erroAoPreparar }: Props) {
           size="xs"
           loading={conferir.isPending}
           disabled={consertar.isPending}
-          onClick={() => conferir.mutate()}
+          onClick={() => conferir.mutate(undefined, guardar)}
         >
           Conferir
         </Button>
         {podeConsertar && (
-          <Button size="xs" loading={consertar.isPending} disabled={conferir.isPending} onClick={() => consertar.mutate()}>
+          <Button size="xs" loading={consertar.isPending} disabled={conferir.isPending} onClick={() => consertar.mutate(undefined, guardar)}>
             Consertar
           </Button>
         )}

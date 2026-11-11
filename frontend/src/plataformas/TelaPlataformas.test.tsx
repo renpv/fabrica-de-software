@@ -220,4 +220,28 @@ describe("TelaPlataformas", () => {
     await usuario.click(screen.getByRole("button", { name: "Confirmar exclusão" }));
     expect(await screen.findByText("Esta conexão ainda tem projetos.")).toBeInTheDocument();
   });
+
+  it("conferir depois de consertar mostra o resultado mais recente", async () => {
+    basico([
+      http.get("/api/conexoes-plataforma/", () => HttpResponse.json([conexao("c1", "Meu GitLab", "gitlab")])),
+      http.get("/api/projetos/", () => HttpResponse.json([projeto("p1", "loja", [item("b", false, true)])])),
+      http.post("/api/projetos/p1/preparar/", () =>
+        HttpResponse.json({ itens: [item("b", true, true)], conferido_em: null }),
+      ),
+      http.post("/api/projetos/p1/conferir/", () =>
+        HttpResponse.json({ itens: [item("b", false, true)], conferido_em: null }),
+      ),
+    ]);
+    const usuario = userEvent.setup();
+    renderizarApp("/plataformas");
+
+    const loja = (await screen.findByText("loja")).closest("[data-projeto]") as HTMLElement;
+    await usuario.click(within(loja).getByRole("button", { name: "Consertar" }));
+    await waitFor(() => expect(within(loja).getByText("✓")).toBeInTheDocument());
+    expect(within(loja).queryByRole("button", { name: "Consertar" })).not.toBeInTheDocument();
+
+    await usuario.click(within(loja).getByRole("button", { name: "Conferir" }));
+    await waitFor(() => expect(within(loja).getByText("✗")).toBeInTheDocument());
+    expect(within(loja).getByRole("button", { name: "Consertar" })).toBeInTheDocument();
+  });
 });
