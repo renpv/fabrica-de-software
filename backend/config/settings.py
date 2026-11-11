@@ -1,6 +1,7 @@
 """Configurações do projeto. Tudo vem de variáveis de ambiente (12-factor)."""
 
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import environ
 
@@ -12,6 +13,16 @@ SECRET_KEY = env("DJANGO_SECRET_KEY")
 DEBUG = env.bool("DJANGO_DEBUG", default=False)
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=[])
 FABRICA_URL_PUBLICA = env("FABRICA_URL_PUBLICA")
+
+# A origem pública (esquema + host) é a única confiável para o CSRF. Com https, o app roda atrás de
+# um proxy (Caddy ou túnel) que termina o TLS e manda X-Forwarded-Proto; sem isso o Django acharia
+# que a requisição é http e recusaria a origem https. Com http (desenvolvimento), nada muda.
+_url_publica = urlsplit(FABRICA_URL_PUBLICA)
+CSRF_TRUSTED_ORIGINS = [f"{_url_publica.scheme}://{_url_publica.netloc}"]
+_https = _url_publica.scheme == "https"
+CSRF_COOKIE_SECURE = _https
+SESSION_COOKIE_SECURE = _https
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https") if _https else None
 # A primeira chave cifra; todas decifram (permite trocar a chave sem perder dados).
 FABRICA_CHAVES_COFRE = [
     chave.strip() for chave in env.list("FABRICA_CHAVES_COFRE", default=[]) if chave.strip()

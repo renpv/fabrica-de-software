@@ -6,14 +6,23 @@
 
 	# Webhooks do GitHub e do GitLab: nunca em cache.
 	handle /api/webhooks/* {
-		header Cache-Control "no-store"
+		header >Cache-Control "no-store"
 		reverse_proxy backend:8000
 	}
 
+	# reverse_proxy já envia X-Forwarded-Proto/For/Host, descartando os valores vindos do cliente;
+	# o Django lê o X-Forwarded-Proto quando FABRICA_URL_PUBLICA é https (SECURE_PROXY_SSL_HEADER).
 	handle /api/* {
 		reverse_proxy backend:8000
 	}
-	handle /admin/* {
+
+	# /admin fica fora do ar por padrão: o Caddy não limita tentativas de login (o limite do app
+	# vale só para /api/sessao/). Só com FABRICA_EXPOR_ADMIN=true, e de forma temporária.
+	@admin {
+		path /admin /admin/*
+		expression "'{$FABRICA_EXPOR_ADMIN:false}' == 'true'"
+	}
+	handle @admin {
 		reverse_proxy backend:8000
 	}
 
