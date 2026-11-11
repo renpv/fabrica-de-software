@@ -1,0 +1,32 @@
+# Único ponto de entrada. FABRICA_SITE_CADDY define o endereço:
+#   ":80"                   HTTP puro (desenvolvimento e fumaça)
+#   "fabrica.exemplo.com"   HTTPS automático (certificado do Let's Encrypt)
+{$FABRICA_SITE_CADDY::80} {
+	encode zstd gzip
+
+	# Webhooks do GitHub e do GitLab: nunca em cache.
+	handle /api/webhooks/* {
+		header Cache-Control "no-store"
+		reverse_proxy backend:8000
+	}
+
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
+	handle /admin/* {
+		reverse_proxy backend:8000
+	}
+
+	# /static/ (admin e DRF) é servido pelo próprio back-end com WhiteNoise;
+	# o Caddy só encaminha, assim não há volume compartilhado entre as imagens.
+	handle /static/* {
+		reverse_proxy backend:8000
+	}
+
+	# Front-end: arquivos do dist; qualquer outra rota cai no index.html (SPA).
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}
